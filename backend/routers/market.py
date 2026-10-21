@@ -1,8 +1,9 @@
 """API routers — market data endpoints."""
-from fastapi import APIRouter
+from fastapi import Depends, APIRouter
+from services.auth.api_key_auth import require_api_key
 from services.market_data import market_data_service, NIFTY50_STOCKS, INDICES
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 @router.get("/watchlist")

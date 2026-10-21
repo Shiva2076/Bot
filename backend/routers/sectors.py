@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import Depends, APIRouter
+from services.auth.api_key_auth import require_api_key
 from engines.sector_rotation import get_sector_performance, get_sector_recommendation
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 @router.get("/")

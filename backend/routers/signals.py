@@ -1,10 +1,11 @@
 """API routers — AI signal generation endpoints."""
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import Depends, APIRouter, BackgroundTasks
+from services.auth.api_key_auth import require_api_key
 from agents.orchestrator import generate_signal, generate_signals_batch
 from services.market_data import NIFTY50_STOCKS
 from services.paper_trading import paper_trading
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 @router.get("/generate/{symbol}")

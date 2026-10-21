@@ -3,7 +3,6 @@ Institutional Data Service — fetches FII/DII activity from NSE public APIs.
 """
 import aiohttp
 from typing import Dict
-import json
 
 NSE_FII_DII_URL = "https://www.nseindia.com/api/fiidiiTradeReact"
 NSE_HEADERS = {
@@ -17,7 +16,7 @@ NSE_HEADERS = {
 async def get_institutional_data(symbol: str = None) -> Dict:
     """
     Fetch FII and DII daily flows from NSE.
-    Returns net buying/selling in Crores.
+    Returns net buying/selling in Crores, or an explicit unavailable result.
     """
     try:
         async with aiohttp.ClientSession(headers=NSE_HEADERS) as session:
@@ -28,48 +27,31 @@ async def get_institutional_data(symbol: str = None) -> Dict:
                 if resp.status == 200:
                     data = await resp.json(content_type=None)
                     return _parse_fii_dii(data)
+                return _unavailable(f"NSE FII/DII HTTP {resp.status}")
     except Exception as e:
         print(f"FII/DII fetch error: {e}")
-
-    # Return mock data when NSE API is unavailable
-    return _mock_institutional_data()
+        return _unavailable(f"NSE FII/DII fetch failed: {type(e).__name__}")
 
 
 def _parse_fii_dii(data) -> Dict:
     """Parse NSE FII/DII API response."""
+    if not isinstance(data, list) or not data:
+        return _unavailable("NSE FII/DII response empty")
     try:
-        if isinstance(data, list) and len(data) > 0:
-            latest = data[0]
-            fii_net = float(latest.get("netVal", 0)) if "FII" in str(latest.get("category", "")) else 0
-            dii_net = float(latest.get("netVal", 0)) if "DII" in str(latest.get("category", "")) else 0
-
-            fii_entries = [d for d in data if "FII" in str(d.get("category", ""))]
-            dii_entries = [d for d in data if "DII" in str(d.get("category", ""))]
-
-            fii_net = sum(float(d.get("netVal", 0)) for d in fii_entries[:1])
-            dii_net = sum(float(d.get("netVal", 0)) for d in dii_entries[:1])
-
-            return {
-                "fii_net": round(fii_net, 2),
-                "dii_net": round(dii_net, 2),
-                "delivery_pct": 45.0,  # Would need separate endpoint
-                "oi_change_pct": 0,
-                "pcr": 1.0,
-                "source": "NSE Live",
-            }
-    except Exception as e:
+        fii_entries = [d for d in data if "FII" in str(d.get("category", ""))]
+        dii_entries = [d for d in data if "DII" in str(d.get("category", ""))]
+        if not fii_entries or not dii_entries:
+            return _unavailable("NSE FII/DII response missing FII or DII rows")
+        return {
+            "available": True,
+            "fii_net": round(float(fii_entries[0].get("netVal", 0)), 2),
+            "dii_net": round(float(dii_entries[0].get("netVal", 0)), 2),
+            "source": "NSE Live",
+        }
+    except (TypeError, ValueError) as e:
         print(f"FII/DII parse error: {e}")
-    return _mock_institutional_data()
+        return _unavailable("NSE FII/DII response could not be parsed")
 
 
-def _mock_institutional_data() -> Dict:
-    """Mock data for development/when NSE API is unavailable."""
-    import random
-    return {
-        "fii_net": round(random.uniform(-3000, 3000), 2),
-        "dii_net": round(random.uniform(-1500, 2000), 2),
-        "delivery_pct": round(random.uniform(35, 70), 1),
-        "oi_change_pct": round(random.uniform(-10, 15), 2),
-        "pcr": round(random.uniform(0.7, 1.4), 2),
-        "source": "Mock (NSE API unavailable)",
-    }
+def _unavailable(reason: str) -> Dict:
+    return {"available": False, "source": "unavailable", "reason": reason}

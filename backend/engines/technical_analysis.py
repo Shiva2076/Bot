@@ -62,6 +62,22 @@ def compute_vwap(df: pd.DataFrame) -> pd.Series:
     return vwap
 
 
+def compute_rvol(df: pd.DataFrame, window: int = 20) -> Optional[float]:
+    """
+    Relative Volume — compare the most-recent candle's volume to the rolling
+    average volume of the same sequential-position candles over the last
+    `window` periods.  Returns a ratio; 1.5 = 50% above average.
+    """
+    if "volume" not in df.columns or len(df) < window + 1:
+        return None
+    vols = df["volume"].values
+    current_vol = float(vols[-1])
+    avg_vol = float(np.mean(vols[-window - 1:-1]))
+    if avg_vol == 0:
+        return None
+    return round(current_vol / avg_vol, 2)
+
+
 def compute_adx(df: pd.DataFrame, period=14) -> Dict[str, pd.Series]:
     high = df["high"]
     low = df["low"]
@@ -223,6 +239,10 @@ def run_full_analysis(df: pd.DataFrame) -> Dict:
         results["volume_trend"] = "HIGH" if results["volume_ratio"] > 1.5 else (
             "LOW" if results["volume_ratio"] < 0.7 else "NORMAL"
         )
+        # Relative volume (time-slot normalised)
+        rvol = compute_rvol(df)
+        if rvol is not None:
+            results["rvol"] = rvol
 
     # Price relative to EMAs
     current_price = float(close.iloc[-1])

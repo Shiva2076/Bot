@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Briefcase, Newspaper,
-  History, BookOpen, BarChart2, Zap, Activity
+  History, BookOpen, BarChart2, Zap, Activity, User, CandlestickChart
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Watchlist from './pages/Watchlist';
@@ -10,6 +10,9 @@ import News from './pages/News';
 import TradeHistory from './pages/TradeHistory';
 import Journal from './pages/Journal';
 import Backtest from './pages/Backtest';
+import Personal from './pages/Personal';
+import Trade from './pages/Trade';
+import { isMarketOpen } from './utils/market-hours';
 import './index.css';
 
 const navItems = [
@@ -20,18 +23,11 @@ const navItems = [
   { to: '/history', icon: History, label: 'Trade History' },
   { to: '/journal', icon: BookOpen, label: 'Learning Journal' },
   { to: '/backtest', icon: BarChart2, label: 'Backtesting' },
+  { to: '/trade', icon: CandlestickChart, label: 'Trade' },
+  { to: '/personal', icon: User, label: 'Personal' },
 ];
 
 function Sidebar() {
-  const isMarketOpen = () => {
-    const now = new Date();
-    const day = now.getDay();
-    if (day === 0 || day === 6) return false;
-    const h = now.getHours(), m = now.getMinutes();
-    const mins = h * 60 + m;
-    return mins >= 555 && mins <= 930; // 9:15 – 15:30 IST
-  };
-
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -79,6 +75,8 @@ export default function App() {
             <Route path="/history" element={<TradeHistory />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/backtest" element={<Backtest />} />
+            <Route path="/trade" element={<Trade />} />
+            <Route path="/personal" element={<Personal />} />
           </Routes>
         </main>
       </div>

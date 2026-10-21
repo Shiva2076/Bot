@@ -1,5 +1,6 @@
 """Portfolio, trades, news, backtest, sectors routers."""
-from fastapi import APIRouter
+from fastapi import Depends, APIRouter
+from services.auth.api_key_auth import require_api_key
 from services.paper_trading import paper_trading
 from services.market_data import market_data_service
 from services.news_aggregator import get_news_with_sentiment
@@ -10,7 +11,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 # ── Portfolio ──────────────────────────────────────────────────────────────────
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 @router.get("/summary")

@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Dict, List
 import pytz
 from config import settings
+from schemas.personal_trade import PaperTradeOpened, TradeExitRequest
+from services.personal.paper_trade_recorder import paper_trade_recorder
 
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -83,6 +85,18 @@ class PaperTradingService:
             "status": "OPEN",
         }
 
+        position["trade_id"] = await paper_trade_recorder.record_open(PaperTradeOpened(
+            symbol=symbol,
+            quantity=quantity,
+            entry_price=position["entry_price"],
+            invested_amount=position["invested"],
+            stop_loss=position["stop_loss"],
+            target_1=position["target_1"],
+            target_2=position["target_2"],
+            confidence=position["confidence"],
+            market_regime=position["market_regime"],
+        ))
+
         positions.append(position)
         portfolio["cash"] = round(cash - invested, 2)
         portfolio["total_invested"] = round(portfolio["total_invested"] + invested, 2)
@@ -112,6 +126,12 @@ class PaperTradingService:
             "status": "CLOSED",
             "outcome": "WIN" if pnl > 0 else ("BREAKEVEN" if pnl == 0 else "LOSS"),
         }
+
+        await paper_trade_recorder.record_close(pos["trade_id"], TradeExitRequest(
+            exit_price=current_price,
+            exit_time=datetime.now(IST),
+            exit_reason=reason,
+        ))
 
         _db["positions"] = [p for p in positions if p["symbol"] != symbol]
         trade_history.append(closed_trade)

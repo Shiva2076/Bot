@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown, Activity, Zap, RefreshCw } from 'lucide-react';
 import { marketAPI, sectorsAPI, newsAPI } from '../api/client';
+import PremarketPanel from '../components/PremarketPanel';
 
 function IndexCard({ index }: { index: any }) {
   const pos = index.change_pct >= 0;
@@ -141,6 +142,10 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
+          <div style={{ marginBottom: 20 }}>
+            <PremarketPanel />
+          </div>
+
           {/* Index Bar */}
           <div className="index-bar">
             {indices.length > 0

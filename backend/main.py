@@ -1,6 +1,7 @@
 """
 FastAPI main application — registers all routers and startup/shutdown events.
 """
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -8,8 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import create_tables
 from config import settings
 from services.market_data import market_data_service
+from services.trading.providers import (
+    angel_master,
+    market_snapshot_monitor,
+    premarket_scheduler,
+    prediction_outcome_monitor,
+    risk_monitor,
+)
 
-from routers import market, signals, portfolio, news, trades, backtest, sectors
+from routers import market, signals, portfolio, news, trades, backtest, sectors, personal, trading, options, premarket, orb
 
 
 @asynccontextmanager
@@ -18,7 +26,17 @@ async def lifespan(app: FastAPI):
     print("Starting AI Trading Research Platform...")
     await create_tables()
     print("Database tables created")
+    angel_master.start_warm()
+    risk_task = asyncio.create_task(risk_monitor.run())
+    prediction_outcome_task = asyncio.create_task(prediction_outcome_monitor.run())
+    snapshot_task = asyncio.create_task(market_snapshot_monitor.run())
+    premarket_scheduler.start()
+    await premarket_scheduler.catch_up_if_needed()
     yield
+    premarket_scheduler.shutdown()
+    snapshot_task.cancel()
+    prediction_outcome_task.cancel()
+    risk_task.cancel()
     print("Shutting down...")
 
 
@@ -45,6 +63,11 @@ app.include_router(news.router, prefix="/api/news", tags=["News"])
 app.include_router(trades.router, prefix="/api/trades", tags=["Trades"])
 app.include_router(backtest.router, prefix="/api/backtest", tags=["Backtest"])
 app.include_router(sectors.router, prefix="/api/sectors", tags=["Sectors"])
+app.include_router(personal.router, prefix="/api/personal", tags=["Personal"])
+app.include_router(trading.router, prefix="/api/trading", tags=["Trading"])
+app.include_router(options.router, prefix="/api/options", tags=["Options"])
+app.include_router(premarket.router, prefix="/api/premarket", tags=["Pre-Market"])
+app.include_router(orb.router, prefix="/api/orb", tags=["ORB Strategy"])
 
 
 @app.get("/health")

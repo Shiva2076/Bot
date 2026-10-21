@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy import text
 from sqlalchemy.orm import DeclarativeBase
 from config import settings
 
@@ -32,6 +33,25 @@ async def get_db():
 
 async def create_tables():
     """Create all tables on startup."""
-    from models import stock, signal, trade, journal  # noqa: F401
+    from models import (  # noqa: F401
+        stock, signal, trade, journal, premarket_report, strategy_signal, prediction_log, market_snapshot,
+    )
+    from models.prediction_log import PRE_FIX_DATA_VERSION
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("ALTER TABLE trades ALTER COLUMN symbol TYPE VARCHAR(40)"))
+        await conn.execute(text(
+            "ALTER TABLE prediction_logs "
+            f"ADD COLUMN IF NOT EXISTS data_version VARCHAR(40) NOT NULL DEFAULT '{PRE_FIX_DATA_VERSION}', "
+            "ADD COLUMN IF NOT EXISTS lot_size INTEGER, "
+            "ADD COLUMN IF NOT EXISTS cluster_scores JSON, "
+            "ADD COLUMN IF NOT EXISTS regime JSON, "
+            "ADD COLUMN IF NOT EXISTS shadow_features JSON, "
+            "ADD COLUMN IF NOT EXISTS net_pnl_15m FLOAT, "
+            "ADD COLUMN IF NOT EXISTS net_pnl_30m FLOAT, "
+            "ADD COLUMN IF NOT EXISTS net_pnl_60m FLOAT"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_prediction_logs_data_version ON prediction_logs (data_version)"
+        ))

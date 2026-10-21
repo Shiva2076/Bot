@@ -47,7 +47,7 @@ def synthesize(
             "label": "Institutional Activity",
             "agent": "institutional",
             "score": inst_out.get("confidence_contribution", 0),
-            "max": 12,
+            "max": 12 if inst_out.get("available", True) else 0,
             "reasons": inst_out.get("reasons", []),
         },
         {
