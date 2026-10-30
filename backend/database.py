@@ -1,7 +1,15 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase
 from config import settings
+
+db_url = make_url(settings.database_url)
+print("DB URL configured:", bool(settings.database_url))
+print("DB scheme:", db_url.drivername)
+print("DB host:", db_url.host)
+print("DB port:", db_url.port)
+print("DB name:", db_url.database)
 
 engine = create_async_engine(
     settings.database_url,
