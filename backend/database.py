@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from config import settings
 
 db_url = make_url(settings.database_url)
@@ -14,6 +15,8 @@ print("DB name:", db_url.database)
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
+    poolclass=NullPool,
+    connect_args={"ssl": "require", "timeout": 30},
 )
 
 AsyncSessionLocal = async_sessionmaker(
