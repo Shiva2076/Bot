@@ -4,6 +4,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
 from config import settings
+from database_connect_args import AsyncpgConnectArgsFactory
 
 db_url = make_url(settings.database_url)
 print("DB URL configured:", bool(settings.database_url))
@@ -16,7 +17,7 @@ engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
     poolclass=NullPool,
-    connect_args={"ssl": "require", "timeout": 30},
+    connect_args=AsyncpgConnectArgsFactory(settings.database_url).build(),
 )
 
 AsyncSessionLocal = async_sessionmaker(
