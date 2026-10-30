@@ -42,8 +42,23 @@ async def get_db():
             await session.close()
 
 
+async def check_database_connectivity() -> None:
+    """Raises if the database cannot accept connections."""
+    async with engine.connect() as connection:
+        await connection.execute(text("SELECT 1"))
+
+
+async def dispose_engine() -> None:
+    await engine.dispose()
+
+
 async def create_tables():
-    """Create all tables on startup."""
+    """
+    Legacy schema bootstrap used only for offline/local emergency repair.
+
+    Production and Vercel must apply schema via Alembic (see MIGRATIONS.md).
+    Do not call this from FastAPI lifespan.
+    """
     from models import (  # noqa: F401
         stock, signal, trade, journal, premarket_report, strategy_signal, prediction_log, market_snapshot,
     )
