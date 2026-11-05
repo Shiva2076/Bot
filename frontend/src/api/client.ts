@@ -15,7 +15,7 @@ import type {
 } from '../types/trading';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8002',
+  baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 30000,
 });
 
