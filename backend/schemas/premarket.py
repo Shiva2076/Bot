@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from schemas.premarket_wait_trigger import PremarketWaitTrigger
+
 
 class MarketSentiment(str, Enum):
     BULLISH = "BULLISH"
@@ -108,6 +110,7 @@ class PremarketReport(BaseModel):
     heuristic_confidence: float = Field(description="Heuristic 0-100 score, not a probability of success")
     directional_score: float
     recommended_action: RecommendedAction
+    wait_trigger: PremarketWaitTrigger = PremarketWaitTrigger.NONE
     global_markets: List[IndexMove]
     gift_nifty: GiftNiftySnapshot
     india_vix: IndiaVixSnapshot

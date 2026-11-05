@@ -19,6 +19,7 @@ from schemas.prediction import (
     PredictionDirection,
 )
 from schemas.premarket import MarketSentiment, RecommendedAction
+from schemas.premarket_wait_trigger import PremarketWaitTrigger
 from schemas.trading import Tick
 from services.prediction.adx_regime_multiplier import AdxRegimeMultiplier
 from services.prediction.agent_factor_analyzer import AgentFactorAnalyzer
@@ -107,7 +108,11 @@ def _chart_shadow() -> ChartStructureShadowCalculator:
 
 def _analyzers(calendar: TradingCalendar) -> PredictionAnalyzers:
     builder = PredictionFactorBuilder()
-    windows = StrikeWindowPolicy({OptionUnderlying.NIFTY: 500.0, OptionUnderlying.BANKNIFTY: 1500.0})
+    windows = StrikeWindowPolicy({
+        OptionUnderlying.NIFTY: 500.0,
+        OptionUnderlying.BANKNIFTY: 1500.0,
+        OptionUnderlying.SENSEX: 1000.0,
+    })
     return PredictionAnalyzers(
         metrics=ChainMetricsCalculator(windows),
         agents=AgentFactorAnalyzer(builder, 0.12),
@@ -147,6 +152,7 @@ def _service(
         premarket=MagicMock(bundle=AsyncMock(return_value=PremarketFactorBundle(
             factors=[],
             recommended_action=premarket_action,
+            wait_trigger=PremarketWaitTrigger.NONE,
         ))),
         vix=None,
         futures=MagicMock(latest=MagicMock(return_value=None)),
@@ -154,7 +160,7 @@ def _service(
     chain_service = MagicMock()
     chain_service.get_chain = AsyncMock(return_value=chain)
     market_data = MagicMock()
-    market_data.get_tick = AsyncMock(return_value=spot_tick)
+    market_data.get_preferred_tick = AsyncMock(return_value=spot_tick)
     recorder = MagicMock()
     return OptionPredictionService(
         chain_service=chain_service,
@@ -337,14 +343,16 @@ async def test_mtf_conflict_wait_suppresses_contract():
         indicators=MagicMock(get=AsyncMock(return_value=_indicators(25100))),
         indicators_15m=MagicMock(get=AsyncMock(return_value=_indicators(24900))),  # conflict vs ema 25000
         premarket=MagicMock(bundle=AsyncMock(return_value=PremarketFactorBundle(
-            factors=[], recommended_action=RecommendedAction.WATCH,
+            factors=[],
+            recommended_action=RecommendedAction.WATCH,
+            wait_trigger=PremarketWaitTrigger.NONE,
         ))),
         vix=None,
         futures=MagicMock(latest=MagicMock(return_value=None)),
     )
     service = OptionPredictionService(
         chain_service=MagicMock(get_chain=AsyncMock(return_value=_chain(now, exchange))),
-        market_data=MagicMock(get_tick=AsyncMock(return_value=Tick(
+        market_data=MagicMock(get_preferred_tick=AsyncMock(return_value=Tick(
             symbol="^NSEI", ltp=25100, prev_close=25000, change=100, change_pct=0.4,
             timestamp=exchange, provider="ANGEL", fetched_at=now, exchange_timestamp=exchange,
         ))),

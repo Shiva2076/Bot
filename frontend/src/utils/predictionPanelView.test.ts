@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { QuoteFreshness } from '../types/prediction.ts';
 import {
+  formatPredictionSnapshotLabel,
   formatQuoteFreshnessLine,
   isDiagnosticPrediction,
+  isPredictionSnapshotStale,
+  predictionSnapshotAgeSeconds,
   quoteRole,
   resolveFreshnessBasis,
   scoreHeading,
@@ -110,5 +113,33 @@ describe('formatQuoteFreshnessLine', () => {
     const line = formatQuoteFreshnessLine(option);
     assert.match(line, /^Option NIFTY26MAR25000CE:/);
     assert.match(line, /FRESH · verified · basis EXCHANGE/);
+  });
+});
+
+describe('prediction snapshot age', () => {
+  const generatedAt = '2026-10-23T06:02:52.000Z';
+  const nowMs = Date.parse('2026-10-23T06:03:22.000Z');
+
+  it('computes non-negative age in seconds', () => {
+    assert.equal(predictionSnapshotAgeSeconds(generatedAt, nowMs), 30);
+    assert.equal(predictionSnapshotAgeSeconds(generatedAt, Date.parse(generatedAt) - 5000), 0);
+    assert.equal(predictionSnapshotAgeSeconds('not-a-date', nowMs), null);
+  });
+
+  it('flags stale snapshots past the refresh budget', () => {
+    assert.equal(isPredictionSnapshotStale(30, 90), false);
+    assert.equal(isPredictionSnapshotStale(91, 90), true);
+    assert.equal(isPredictionSnapshotStale(null, 90), false);
+  });
+
+  it('includes relative age in the header label', () => {
+    assert.match(
+      formatPredictionSnapshotLabel(generatedAt, 'REGULAR', nowMs),
+      /REGULAR · 30s ago$/,
+    );
+    assert.match(
+      formatPredictionSnapshotLabel(generatedAt, 'REGULAR', nowMs + 120_000),
+      /REGULAR · 2m ago$/,
+    );
   });
 });

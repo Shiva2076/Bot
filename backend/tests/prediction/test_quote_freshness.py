@@ -6,7 +6,13 @@ import pytz
 
 from schemas.angel import AngelQuote
 from schemas.options import OptionQuote, OptionUnderlying
-from schemas.prediction import DataFreshness, FreshnessBasis, GateReason, PredictionDirection
+from schemas.prediction import (
+    DataFreshness,
+    FreshnessBasis,
+    FreshnessRejectReason,
+    GateReason,
+    PredictionDirection,
+)
 from schemas.trading import Tick
 from services.brokers.angel.quote_mapper import AngelQuoteMapper
 from services.prediction.prediction_market_gate import (
@@ -124,7 +130,8 @@ def test_epoch_only_exchange_time_is_unknown_not_stale():
     assert result.gate_reason == GateReason.UNKNOWN_FRESHNESS
     assert result.data_freshness == DataFreshness.UNKNOWN
     assert result.quotes[0].verified is False
-    assert result.quotes[0].basis == FreshnessBasis.FETCH
+    assert result.quotes[0].basis == FreshnessBasis.UNKNOWN
+    assert result.quotes[0].reject_reason == FreshnessRejectReason.IMPLAUSIBLE
     assert result.blocks_action
 
 

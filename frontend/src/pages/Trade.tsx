@@ -3,6 +3,7 @@ import { tradingAPI } from '../api/client';
 import ChartStructurePanel from '../components/ChartStructurePanel';
 import LiveChart from '../components/LiveChart';
 import OptionChainTable from '../components/OptionChainTable';
+import IndexSignalBar from '../components/IndexSignalBar';
 import PredictionPanel, { type PredictionAddRequest } from '../components/PredictionPanel';
 import PremarketPanel from '../components/PremarketPanel';
 import { PnlText, Tag } from '../components/TradeBadges';
@@ -35,6 +36,7 @@ interface OrderPrefill {
   stopLoss: number;
   target: number;
   appliedAt: number;
+  fromSignal: boolean;
 }
 
 const labelStyle = { fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 6 } as const;
@@ -81,8 +83,9 @@ function OrderPanel({ instrument, tick, onPlaced, onClear, prefill }: {
         lots,
         stop_loss: stopLoss ? Number(stopLoss) : null,
         target: target ? Number(target) : null,
+        override_reason: null,
       });
-      setMessage({ text: `${action} ${res.data.quantity} @ ₹${res.data.entry_price.toFixed(2)} executed`, ok: true });
+      setMessage({ text: `${action} ${res.data.quantity} @ ₹${res.data.entry_price.toFixed(2)} executed · ${res.data.order_source}`, ok: true });
       setStopLoss(''); setTarget('');
       onPlaced();
     } catch (err) {
@@ -241,14 +244,13 @@ export default function Trade() {
   };
 
   useEffect(() => {
-    setTick(null);
+    // Keep last tick/chart until the next poll arrives — avoid blanking the whole panel.
     setSelectedOption(null);
     setOrderPrefill(null);
+    setOptionTick(null);
     setExpiry('');
     setPanelTab('ORDER');
-    setChartStructure(null);
   }, [symbol]);
-  useEffect(() => { setOptionTick(null); }, [selectedOption?.symbol]);
   useEffect(() => {
     if (!chartOn) setChartStructure(null);
   }, [chartOn]);
@@ -323,17 +325,21 @@ export default function Trade() {
         stopLoss: request.contract.levels.stop_loss,
         target: request.contract.levels.target,
         appliedAt: Date.now(),
+        fromSignal: true,
       },
     );
   };
 
-  const up = (tick?.change ?? 0) >= 0;
+  const liveTick = tick?.symbol === symbol ? tick : null;
+  const liveOptionTick =
+    selectedOption && optionTick?.symbol === selectedOption.symbol ? optionTick : null;
+  const up = (liveTick?.change ?? 0) >= 0;
 
   return (
     <div>
       <div className="page-header">
         <h1 className="page-title">Trade</h1>
-        <p className="page-subtitle">Live chart with instant market orders · Data via {tick?.provider ?? '--'}</p>
+        <p className="page-subtitle">Live chart with instant market orders · Data via {liveTick?.provider ?? '--'}</p>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -352,16 +358,18 @@ export default function Trade() {
 
       <PremarketPanel compact />
 
+      <IndexSignalBar onSelectIndex={setTab} onPlaced={fetchPositions} />
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'flex-start' }}>
         <div className="card" style={{ flex: '2 1 520px', minWidth: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div>
               <div style={{ fontWeight: 700 }}>{instrument?.name ?? symbol}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                <span className="mono" style={{ fontSize: '1.6rem', fontWeight: 800 }}>{tick ? tick.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '--'}</span>
-                {tick && (
+                <span className="mono" style={{ fontSize: '1.6rem', fontWeight: 800 }}>{liveTick ? liveTick.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '--'}</span>
+                {liveTick && (
                   <span className="mono" style={{ color: up ? 'var(--buy)' : 'var(--sell)', fontWeight: 600 }}>
-                    {up ? '+' : ''}{tick.change.toFixed(2)} ({up ? '+' : ''}{tick.change_pct.toFixed(2)}%)
+                    {up ? '+' : ''}{liveTick.change.toFixed(2)} ({up ? '+' : ''}{liveTick.change_pct.toFixed(2)}%)
                   </span>
                 )}
               </div>
@@ -387,7 +395,7 @@ export default function Trade() {
               <LiveChart
                 symbol={symbol}
                 interval={candleInterval}
-                tick={tick}
+                tick={liveTick}
                 levels={chartLevels}
                 projections={chartProjections}
               />
@@ -430,7 +438,7 @@ export default function Trade() {
                 ? (
                   <OrderPanel
                     instrument={selectedOption}
-                    tick={optionTick}
+                    tick={liveOptionTick}
                     onPlaced={fetchPositions}
                     onClear={() => { setSelectedOption(null); setOrderPrefill(null); }}
                     prefill={orderPrefill}
@@ -439,7 +447,7 @@ export default function Trade() {
                 : (
                   <OrderPanel
                     instrument={instrument}
-                    tick={tick}
+                    tick={liveTick}
                     onPlaced={fetchPositions}
                     onClear={null}
                     prefill={null}

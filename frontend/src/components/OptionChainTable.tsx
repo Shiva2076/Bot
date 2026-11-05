@@ -49,8 +49,6 @@ export default function OptionChainTable({ underlying, expiry, onExpiryChange, s
   const scrolledFor = useRef('');
 
   useEffect(() => {
-    setChain(null);
-    setExpiries([]);
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     const loadExpiries = () => {
@@ -121,7 +119,7 @@ export default function OptionChainTable({ underlying, expiry, onExpiryChange, s
         </select>
       </div>
       {error && <div style={{ padding: '10px 20px', color: 'var(--sell)', fontSize: '0.78rem' }}>{error}</div>}
-      {!chain ? (
+      {!chain || chain.underlying !== underlying || chain.expiry !== expiry ? (
         <div style={{ padding: 30, textAlign: 'center' }}><div className="spinner" /></div>
       ) : (
         <div ref={containerRef} className="table-container" style={{ maxHeight: 520, overflowY: 'auto', position: 'relative' }}>

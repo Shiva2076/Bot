@@ -104,9 +104,22 @@ def _prediction() -> OptionPrediction:
 
 
 def test_mapper_builds_create_payload():
-    payload = PredictionLogMapper("v1.2_gates", "v1_data_fixes").to_create(_prediction())
+    prediction = _prediction()
+    prediction = prediction.model_copy(
+        update={
+            "premarket_action": "WAIT",
+            "premarket_generated_at": datetime(2026, 10, 23, 7, 19, tzinfo=timezone.utc),
+            "premarket_wait_trigger": "LARGE_GAP",
+            "freshness_diagnostics": None,
+        }
+    )
+    payload = PredictionLogMapper("v1.2_gates", "v1_data_fixes").to_create(prediction)
     assert payload.scorer_version == "v1.2_gates"
     assert payload.data_version == "v1_data_fixes"
     assert payload.lot_size == 65
     assert payload.direction == PredictionDirection.WAIT
     assert payload.factors[0]["contribution_pct"] == 50.0
+    assert payload.gate_reason == GateReason.LOW_SIGNAL_SCORE.value
+    assert payload.premarket_action == "WAIT"
+    assert payload.premarket_wait_trigger == "LARGE_GAP"
+    assert payload.premarket_generated_at == datetime(2026, 10, 23, 7, 19, tzinfo=timezone.utc)

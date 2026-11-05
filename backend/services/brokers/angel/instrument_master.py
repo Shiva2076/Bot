@@ -26,10 +26,11 @@ INDEX_REFS: Dict[str, AngelInstrumentRef] = {
 }
 EQUITY_SUFFIX = "-EQ"
 YAHOO_NSE_SUFFIX = ".NS"
-OPTION_SEGMENT = "NFO"
+OPTION_SEGMENTS = frozenset({"NFO", "BFO"})
 OPTION_INSTRUMENT_TYPE = "OPTIDX"
 FUTURES_INSTRUMENT_TYPE = "FUTIDX"
 FUTURES_UNDERLYINGS = {u.value: u for u in OptionUnderlying}
+OPTION_TYPE_SUFFIX_LEN = 2
 ANGEL_STRIKE_MULTIPLIER = 100
 IST = pytz.timezone("Asia/Kolkata")
 DEFAULT_CACHE_PATH = Path(__file__).resolve().parents[3] / ".cache" / "angel_scrip_master.json"
@@ -247,13 +248,13 @@ class AngelInstrumentMaster:
                 refs[f"{scrip.symbol[:-len(EQUITY_SUFFIX)]}{YAHOO_NSE_SUFFIX}"] = AngelInstrumentRef(
                     exchange=scrip.exch_seg, token=scrip.token
                 )
-            elif scrip.exch_seg == OPTION_SEGMENT and scrip.instrumenttype == OPTION_INSTRUMENT_TYPE:
-                parsed = self._parser.parse(scrip.symbol)
-                if parsed:
-                    options[scrip.symbol] = self._to_contract(scrip, parsed)
+            elif scrip.exch_seg in OPTION_SEGMENTS and scrip.instrumenttype == OPTION_INSTRUMENT_TYPE:
+                contract = self._option_contract(scrip)
+                if contract is not None:
+                    options[scrip.symbol] = contract
                     refs[scrip.symbol] = AngelInstrumentRef(exchange=scrip.exch_seg, token=scrip.token)
             elif (
-                scrip.exch_seg == OPTION_SEGMENT
+                scrip.exch_seg in OPTION_SEGMENTS
                 and scrip.instrumenttype == FUTURES_INSTRUMENT_TYPE
                 and scrip.name in FUTURES_UNDERLYINGS
             ):
@@ -271,14 +272,36 @@ class AngelInstrumentMaster:
             lot_size=int(float(scrip.lotsize)),
         )
 
-    def _to_contract(self, scrip: AngelScrip, parsed: ParsedOptionSymbol) -> OptionContract:
+    def _option_contract(self, scrip: AngelScrip) -> Optional[OptionContract]:
+        """Build from NFO/BFO OPTIDX. Symbol-date parse for NSE; scrip fields for Sensex weeklies."""
+        parsed = self._parser.parse(scrip.symbol)
+        if parsed is None:
+            parsed = self._parse_from_scrip(scrip)
+        if parsed is None:
+            return None
         return OptionContract(
             symbol=scrip.symbol,
             token=scrip.token,
             underlying=parsed.underlying,
             expiry=datetime.strptime(scrip.expiry, "%d%b%Y").date(),
             strike=float(scrip.strike) / ANGEL_STRIKE_MULTIPLIER,
-            option_type=OptionType(parsed.option_type),
+            option_type=parsed.option_type,
             lot_size=int(float(scrip.lotsize)),
             display_name=self._parser.display_name(parsed),
+        )
+
+    @staticmethod
+    def _parse_from_scrip(scrip: AngelScrip) -> Optional[ParsedOptionSymbol]:
+        if scrip.name not in OptionUnderlying.__members__:
+            return None
+        suffix = scrip.symbol[-OPTION_TYPE_SUFFIX_LEN:]
+        if suffix not in OptionType.__members__:
+            return None
+        if not scrip.expiry:
+            return None
+        return ParsedOptionSymbol(
+            underlying=OptionUnderlying(scrip.name),
+            expiry=datetime.strptime(scrip.expiry, "%d%b%Y").date(),
+            strike=float(scrip.strike) / ANGEL_STRIKE_MULTIPLIER,
+            option_type=OptionType(suffix),
         )

@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from schemas.prediction import FactorCluster, PredictionFactor
 from schemas.premarket import MarketSentiment, PremarketReport, RecommendedAction, VolatilityBand
+from schemas.premarket_wait_trigger import PremarketWaitTrigger
 from services.premarket.premarket_analyzer_service import PremarketAnalyzerService
 from services.prediction.factor_builder import PredictionFactorBuilder
 
@@ -27,6 +28,8 @@ class PremarketFactorBundle(BaseModel):
 
     factors: List[PredictionFactor]
     recommended_action: RecommendedAction
+    wait_trigger: PremarketWaitTrigger
+    generated_at: Optional[datetime] = None
 
 
 class PremarketPredictionBridge:
@@ -48,6 +51,8 @@ class PremarketPredictionBridge:
                     )
                 ],
                 recommended_action=report.recommended_action,
+                wait_trigger=report.wait_trigger,
+                generated_at=report.generated_at,
             )
         score = SENTIMENT_TO_SCORE[report.overall_sentiment]
         if report.india_vix.available and report.india_vix.band == VolatilityBand.HIGH:
@@ -76,7 +81,12 @@ class PremarketPredictionBridge:
                 detail=detail,
                 cluster=FactorCluster.CONTEXT,
             )
-        return PremarketFactorBundle(factors=[factor], recommended_action=report.recommended_action)
+        return PremarketFactorBundle(
+            factors=[factor],
+            recommended_action=report.recommended_action,
+            wait_trigger=report.wait_trigger,
+            generated_at=report.generated_at,
+        )
 
     async def factors(self) -> List[PredictionFactor]:
         return (await self.bundle()).factors

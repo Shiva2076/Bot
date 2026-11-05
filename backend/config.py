@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     risk_per_trade_pct: float = 1.0
     risk_daily_loss_limit_pct: float = 3.0
     risk_max_open_positions: int = 5
-    risk_enforce_premarket_gate: bool = True
 
     # Paper cost model (single calculator; do not stack elsewhere)
     cost_brokerage_pct: float = 0.03
@@ -55,6 +54,7 @@ class Settings(BaseSettings):
     prediction_scorer_version: str = "v1.3_freshness"
     prediction_data_version: str = "v1_data_fixes"
     prediction_outcome_flat_band_pct: float = 0.05
+    prediction_research_min_sessions: int = 5
     prediction_outcome_monitor_seconds: float = 60.0
     prediction_initial_balance_minutes: int = 60
     prediction_opening_range_minutes: int = 15
@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     prediction_regime_range_adx: float = 20.0
     prediction_strike_window_nifty: float = 500.0
     prediction_strike_window_banknifty: float = 1500.0
+    prediction_strike_window_sensex: float = 1000.0
     prediction_agent_weight: float = 0.12
     prediction_max_quote_age_seconds: float = 30.0
     prediction_min_coverage: float = 0.50
@@ -80,7 +81,12 @@ class Settings(BaseSettings):
     premarket_cache_seconds: float = 120.0
     premarket_scheduler_hour: int = 8
     premarket_scheduler_minute: int = 45
-    premarket_nse_holidays: str = "2026-01-26,2026-03-03,2026-03-26,2026-03-31,2026-04-03,2026-04-14,2026-05-01,2026-08-15,2026-10-02,2026-11-09,2026-12-25"
+    premarket_nse_holidays: str = (
+        "2026-01-15,2026-01-26,2026-03-03,2026-03-26,2026-03-31,2026-04-03,2026-04-14,"
+        "2026-05-01,2026-05-28,2026-06-26,2026-09-14,2026-10-02,2026-10-20,2026-11-10,"
+        "2026-11-24,2026-12-25"
+    )
+    nse_special_sessions: str = ""
     premarket_sentiment_bullish_pct: float = 0.25
     premarket_sentiment_bearish_pct: float = -0.25
     premarket_vix_low: float = 12.0

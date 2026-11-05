@@ -12,6 +12,7 @@ from schemas.prediction import (
     StructureBias,
 )
 from schemas.premarket import RecommendedAction
+from schemas.premarket_wait_trigger import PremarketWaitTrigger
 from schemas.trading import Candle, Tick
 from services.prediction.chart_analysis_interpreter import ChartAnalysisInterpreter
 from services.prediction.chart_candle_policy import ChartCandlePolicy
@@ -217,7 +218,11 @@ async def test_chart_shadow_does_not_change_prediction_outputs():
         )
     )
     sources.premarket.bundle = AsyncMock(
-        return_value=PremarketFactorBundle(factors=[], recommended_action=RecommendedAction.WATCH)
+        return_value=PremarketFactorBundle(
+            factors=[],
+            recommended_action=RecommendedAction.WATCH,
+            wait_trigger=PremarketWaitTrigger.NONE,
+        )
     )
     sources.vix = None
     sources.futures.latest = MagicMock(return_value=None)
@@ -232,7 +237,7 @@ async def test_chart_shadow_does_not_change_prediction_outputs():
     chain_service = MagicMock()
     chain_service.get_chain = AsyncMock(return_value=chain)
     market_data = MagicMock()
-    market_data.get_tick = AsyncMock(
+    market_data.get_preferred_tick = AsyncMock(
         return_value=Tick(
             symbol="^NSEI",
             ltp=25100,

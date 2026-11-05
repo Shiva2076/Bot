@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from typing import List, Optional
 
@@ -32,9 +33,11 @@ class ChartStructureShadowCalculator:
         as_of: datetime,
     ) -> ChartStructureFeatures:
         try:
-            series_5m = await self._market_data.get_candles(symbol, CandleInterval.FIVE_MINUTES)
-            series_15m = await self._market_data.get_candles(symbol, CandleInterval.FIFTEEN_MINUTES)
-            series_daily = await self._market_data.get_candles(symbol, CandleInterval.ONE_DAY)
+            series_5m, series_15m, series_daily = await asyncio.gather(
+                self._market_data.get_candles(symbol, CandleInterval.FIVE_MINUTES),
+                self._market_data.get_candles(symbol, CandleInterval.FIFTEEN_MINUTES),
+                self._market_data.get_candles(symbol, CandleInterval.ONE_DAY),
+            )
             return self.calculate_from_candles(
                 candles_5m=series_5m.candles,
                 candles_15m=series_15m.candles,

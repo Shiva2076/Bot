@@ -2,7 +2,13 @@ from datetime import datetime, timezone
 from typing import List, Optional, Protocol
 
 from schemas.options import OptionQuote
-from schemas.prediction import DataFreshness, FreshnessBasis, GateReason, QuoteFreshness
+from schemas.prediction import (
+    DataFreshness,
+    FreshnessBasis,
+    FreshnessRejectReason,
+    GateReason,
+    QuoteFreshness,
+)
 from schemas.trading import Tick
 from services.premarket.trading_calendar import TradingCalendar
 from services.trading.exchange_timestamp_validator import ExchangeTimestampValidator
@@ -134,30 +140,52 @@ class PredictionMarketGate:
         now: datetime,
     ) -> QuoteFreshness:
         fetched = self._aware(fetched_at)
+        raw_exchange = exchange_timestamp
         exchange = self._aware(exchange_timestamp)
         if exchange is not None and not ExchangeTimestampValidator.is_plausible(exchange):
-            # Sentinel / garbage exchange clocks are not verified; do not label STALE.
-            exchange = None
+            return QuoteFreshness(
+                symbol=symbol,
+                exchange_timestamp=None,
+                fetched_at=fetched,
+                quoted_at=fetched,
+                age_seconds=None,
+                provider=provider,
+                freshness=DataFreshness.UNKNOWN,
+                basis=FreshnessBasis.UNKNOWN,
+                verified=False,
+                timestamp_field="exchange_timestamp",
+                raw_value=str(raw_exchange) if raw_exchange is not None else None,
+                parsed_value=exchange.isoformat() if exchange is not None else None,
+                reject_reason=FreshnessRejectReason.IMPLAUSIBLE,
+            )
         if exchange is not None:
             age = (now - exchange).total_seconds()
             if age < -self._max_future_skew_seconds:
-                freshness = DataFreshness.UNKNOWN
-                basis = FreshnessBasis.UNKNOWN
-                verified = False
-            elif age < 0:
-                # Within documented skew: treat as just-arrived, never inflate freshness window.
+                return QuoteFreshness(
+                    symbol=symbol,
+                    exchange_timestamp=exchange,
+                    fetched_at=fetched,
+                    quoted_at=exchange,
+                    age_seconds=round(age, 2),
+                    provider=provider,
+                    freshness=DataFreshness.UNKNOWN,
+                    basis=FreshnessBasis.UNKNOWN,
+                    verified=False,
+                    timestamp_field="exchange_timestamp",
+                    raw_value=str(raw_exchange),
+                    parsed_value=exchange.isoformat(),
+                    reject_reason=FreshnessRejectReason.FUTURE,
+                )
+            if age < 0:
                 age = 0.0
                 freshness = DataFreshness.FRESH
-                basis = FreshnessBasis.EXCHANGE
-                verified = True
+                reason = FreshnessRejectReason.OK
             elif age > self._max_exchange_age_seconds:
                 freshness = DataFreshness.STALE
-                basis = FreshnessBasis.EXCHANGE
-                verified = True
+                reason = FreshnessRejectReason.STALE
             else:
                 freshness = DataFreshness.FRESH
-                basis = FreshnessBasis.EXCHANGE
-                verified = True
+                reason = FreshnessRejectReason.OK
             return QuoteFreshness(
                 symbol=symbol,
                 exchange_timestamp=exchange,
@@ -166,8 +194,12 @@ class PredictionMarketGate:
                 age_seconds=round(age, 2),
                 provider=provider,
                 freshness=freshness,
-                basis=basis,
-                verified=verified,
+                basis=FreshnessBasis.EXCHANGE,
+                verified=True,
+                timestamp_field="exchange_timestamp",
+                raw_value=str(raw_exchange),
+                parsed_value=exchange.isoformat(),
+                reject_reason=reason,
             )
         fetch_age = (now - fetched).total_seconds() if fetched is not None else None
         return QuoteFreshness(
@@ -180,6 +212,10 @@ class PredictionMarketGate:
             freshness=DataFreshness.UNKNOWN,
             basis=FreshnessBasis.FETCH if fetched is not None else FreshnessBasis.UNKNOWN,
             verified=False,
+            timestamp_field="fetched_at" if fetched is not None else None,
+            raw_value=fetched.isoformat() if fetched is not None else None,
+            parsed_value=fetched.isoformat() if fetched is not None else None,
+            reject_reason=FreshnessRejectReason.MISSING,
         )
 
     @staticmethod

@@ -15,6 +15,7 @@ class PreTradeOrderContext(BaseModel):
     stop_loss: Optional[float] = Field(default=None, gt=0)
     tick_timestamp: datetime
     tick_provider: str
+    exchange_timestamp: Optional[datetime] = None
     open_positions: int
     starting_capital: float = Field(gt=0)
     available_cash: float

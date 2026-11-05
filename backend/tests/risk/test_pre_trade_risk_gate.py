@@ -30,14 +30,16 @@ def _gate() -> PreTradeRiskGate:
 
 
 def _ctx(**overrides) -> PreTradeOrderContext:
+    now = datetime.now(timezone.utc)
     base = dict(
         symbol="RELIANCE.NS",
         action=TradeAction.BUY,
         quantity=10,
         entry_price=1000.0,
         stop_loss=990.0,
-        tick_timestamp=datetime.now(timezone.utc),
+        tick_timestamp=now,
         tick_provider="TEST",
+        exchange_timestamp=now,
         open_positions=0,
         starting_capital=1_000_000.0,
         available_cash=1_000_000.0,
@@ -54,10 +56,24 @@ def test_allows_valid_order():
     assert _gate().evaluate(_ctx()).allowed is True
 
 
-def test_rejects_stale_data():
-    decision = _gate().evaluate(_ctx(tick_timestamp=datetime.now(timezone.utc) - timedelta(seconds=120)))
+def test_rejects_missing_exchange_timestamp():
+    decision = _gate().evaluate(_ctx(exchange_timestamp=None, tick_provider="YAHOO"))
+    assert decision.allowed is False
+    assert any("missing verified exchange timestamp" in r.lower() for r in decision.reasons)
+    assert any("fetch time not permitted" in r.lower() for r in decision.reasons)
+
+
+def test_rejects_implausible_exchange_timestamp():
+    decision = _gate().evaluate(_ctx(exchange_timestamp=datetime(1970, 1, 1, tzinfo=timezone.utc)))
+    assert decision.allowed is False
+    assert any("implausible" in r.lower() for r in decision.reasons)
+
+
+def test_rejects_stale_exchange_data():
+    decision = _gate().evaluate(_ctx(exchange_timestamp=datetime.now(timezone.utc) - timedelta(seconds=120)))
     assert decision.allowed is False
     assert any("stale" in r.lower() for r in decision.reasons)
+    assert any("risk_max_data_age_seconds=30s" in r for r in decision.reasons)
 
 
 def test_rejects_premarket_no_trade():

@@ -44,6 +44,15 @@ export interface MarketOrderRequest {
   lots: number;
   stop_loss: number | null;
   target: number | null;
+  override_reason: string | null;
+}
+
+export interface PortfolioOpenRequest {
+  action: TradeAction;
+  entry: number;
+  stop_loss: number;
+  target: number | null;
+  override_reason: string | null;
 }
 
 export interface OpenPositionsResponse {

@@ -23,6 +23,7 @@ from services.trading.failover_market_data import FailoverMarketData
 UNDERLYING_SPOT_SYMBOLS: Dict[OptionUnderlying, str] = {
     OptionUnderlying.NIFTY: "^NSEI",
     OptionUnderlying.BANKNIFTY: "^NSEBANK",
+    OptionUnderlying.SENSEX: "^BSESN",
 }
 
 

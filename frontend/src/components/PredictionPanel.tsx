@@ -11,15 +11,22 @@ import type {
 } from '../types/prediction';
 import { apiErrorMessage } from '../utils/api-error';
 import {
+  formatPredictionSnapshotLabel,
   formatQuoteFreshnessLine,
   isDiagnosticPrediction,
+  isPredictionSnapshotStale,
+  predictionSnapshotAgeSeconds,
   resolveFreshnessBasis,
   scoreCaption,
   scoreHeading,
 } from '../utils/predictionPanelView';
 import { Tag } from './TradeBadges';
 
-const PREDICTION_POLL_MS = 120000;
+/** Force a rebuild each cycle so generated_at advances (backend cache is 60s). */
+const PREDICTION_POLL_MS = 60000;
+/** Warn when the held snapshot is older than one missed poll budget. */
+const STALE_AFTER_SECONDS = 90;
+const AGE_TICK_MS = 1000;
 
 const DIRECTION_LABELS: Record<PredictionDirection, string> = {
   CALL: 'BUY CALL',
@@ -79,16 +86,25 @@ export default function PredictionPanel({
   const [prediction, setPrediction] = useState<OptionPrediction | null>(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
-  useEffect(() => { setPrediction(null); }, [underlying, expiry]);
+  useEffect(() => {
+    setPrediction(null);
+    setError('');
+  }, [underlying, expiry]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), AGE_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   usePolling(async () => {
     try {
-      const res = await optionsAPI.getPrediction(underlying, expiry);
+      const res = await optionsAPI.getPrediction(underlying, expiry, true);
       setPrediction(res.data);
       setError('');
     } catch (err) {
-      setError(apiErrorMessage(err));
+      setError(`Auto-refresh failed: ${apiErrorMessage(err)}`);
     }
   }, PREDICTION_POLL_MS, [underlying, expiry], expiry !== '');
 
@@ -100,24 +116,38 @@ export default function PredictionPanel({
       setPrediction(res.data);
       setError('');
     } catch (err) {
-      setError(apiErrorMessage(err));
+      setError(`Refresh failed: ${apiErrorMessage(err)}`);
     } finally {
       setRefreshing(false);
     }
   };
 
-  const color = prediction ? DIRECTION_COLORS[prediction.direction] : 'var(--text-muted)';
-  const contract = prediction?.contract ?? null;
-  const diagnostic = prediction ? isDiagnosticPrediction(prediction) : false;
+  const activePrediction =
+    prediction !== null
+    && prediction.underlying === underlying
+    && prediction.expiry === expiry
+      ? prediction
+      : null;
+  const color = activePrediction ? DIRECTION_COLORS[activePrediction.direction] : 'var(--text-muted)';
+  const contract = activePrediction?.contract ?? null;
+  const diagnostic = activePrediction ? isDiagnosticPrediction(activePrediction) : false;
+  const snapshotAge = activePrediction
+    ? predictionSnapshotAgeSeconds(activePrediction.generated_at, nowMs)
+    : null;
+  const snapshotStale = isPredictionSnapshotStale(snapshotAge, STALE_AFTER_SECONDS);
 
   return (
     <div className="card">
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
         <span className="card-title">Prediction · {underlying}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {prediction && (
-            <span style={labelStyle}>
-              Predicted {new Date(prediction.generated_at).toLocaleTimeString('en-IN')} · {prediction.session_status}
+          {activePrediction && (
+            <span style={{ ...labelStyle, color: snapshotStale ? 'var(--sell)' : labelStyle.color }}>
+              {formatPredictionSnapshotLabel(
+                activePrediction.generated_at,
+                activePrediction.session_status,
+                nowMs,
+              )}
             </span>
           )}
           <button
@@ -132,12 +162,17 @@ export default function PredictionPanel({
         </div>
       </div>
       {error && <div style={{ color: 'var(--sell)', fontSize: '0.78rem', marginBottom: 10 }}>{error}</div>}
-      {!prediction ? (
+      {snapshotStale && activePrediction && !error && (
+        <div style={{ color: 'var(--sell)', fontSize: '0.78rem', marginBottom: 10 }}>
+          Snapshot is stale ({snapshotAge}s old). Auto-refresh should run every 60s — click Refresh if this persists.
+        </div>
+      )}
+      {!activePrediction ? (
         <div style={{ padding: 30, textAlign: 'center' }}><div className="spinner" /></div>
       ) : (
         <>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, gap: 12 }}>
-            <span style={{ fontSize: '1.4rem', fontWeight: 800, color }}>{DIRECTION_LABELS[prediction.direction]}</span>
+            <span style={{ fontSize: '1.4rem', fontWeight: 800, color }}>{DIRECTION_LABELS[activePrediction.direction]}</span>
             <div
               style={{
                 textAlign: 'right',
@@ -159,28 +194,28 @@ export default function PredictionPanel({
                   color: diagnostic ? 'var(--text-muted)' : color,
                 }}
               >
-                {prediction.signal_score.toFixed(1)}
+                {activePrediction.signal_score.toFixed(1)}
               </div>
               {scoreCaption(diagnostic) && (
                 <div style={labelStyle}>{scoreCaption(diagnostic)}</div>
               )}
               <div style={{ ...labelStyle, marginTop: 4 }}>
-                raw {prediction.raw_score.toFixed(3)} · time ×{prediction.time_modifier.toFixed(2)} · cov {(prediction.coverage * 100).toFixed(0)}%
+                raw {activePrediction.raw_score.toFixed(3)} · time ×{activePrediction.time_modifier.toFixed(2)} · cov {(activePrediction.coverage * 100).toFixed(0)}%
               </div>
             </div>
           </div>
 
-          {prediction.gate_reason !== 'NONE' && (
+          {activePrediction.gate_reason !== 'NONE' && (
             <div style={{ ...labelStyle, marginBottom: 10, color: 'var(--sell)' }}>
-              Gate: {prediction.gate_reason.replace(/_/g, ' ')} · freshness {prediction.data_freshness}
+              Gate: {activePrediction.gate_reason.replace(/_/g, ' ')} · freshness {activePrediction.data_freshness}
             </div>
           )}
 
-          {prediction.quote_timestamps.length > 0 && (
+          {activePrediction.quote_timestamps.length > 0 && (
             <div style={{ marginBottom: 12 }}>
               <div style={{ ...labelStyle, marginBottom: 4 }}>Quote freshness</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {prediction.quote_timestamps.map(q => (
+                {activePrediction.quote_timestamps.map(q => (
                   <div
                     key={`${q.symbol}-${resolveFreshnessBasis(q.basis)}-${q.freshness ?? 'UNKNOWN'}`}
                     className="mono"
@@ -201,7 +236,7 @@ export default function PredictionPanel({
                   type="button"
                   className="btn btn-buy"
                   style={{ padding: '4px 14px', fontSize: '0.75rem', fontWeight: 700 }}
-                  onClick={() => onAdd({ contract, lotSize: prediction.lot_size, underlying })}
+                  onClick={() => onAdd({ contract, lotSize: activePrediction.lot_size, underlying })}
                 >
                   ADD
                 </button>
@@ -212,7 +247,7 @@ export default function PredictionPanel({
                 <Metric label="Target" value={formatInr(contract.levels.target)} />
               </div>
               <div style={labelStyle}>
-                1 lot ({prediction.lot_size} qty) ≈ <span className="mono" style={{ color: 'var(--text-primary)' }}>{formatInr(contract.levels.entry * prediction.lot_size)}</span>
+                1 lot ({activePrediction.lot_size} qty) ≈ <span className="mono" style={{ color: 'var(--text-primary)' }}>{formatInr(contract.levels.entry * activePrediction.lot_size)}</span>
               </div>
             </div>
           ) : (
@@ -223,15 +258,15 @@ export default function PredictionPanel({
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-            <Metric label="Near-spot PCR" value={(prediction.metrics.near_spot_pcr ?? prediction.metrics.put_call_ratio).toFixed(2)} />
-            <Metric label="Max Pain" value={prediction.metrics.max_pain.toFixed(0)} />
-            <Metric label="Support (Put OI)" value={prediction.metrics.put_wall.toFixed(0)} />
-            <Metric label="Resistance (Call OI)" value={prediction.metrics.call_wall.toFixed(0)} />
+            <Metric label="Near-spot PCR" value={(activePrediction.metrics.near_spot_pcr ?? activePrediction.metrics.put_call_ratio).toFixed(2)} />
+            <Metric label="Max Pain" value={activePrediction.metrics.max_pain.toFixed(0)} />
+            <Metric label="Support (Put OI)" value={activePrediction.metrics.put_wall.toFixed(0)} />
+            <Metric label="Resistance (Call OI)" value={activePrediction.metrics.call_wall.toFixed(0)} />
           </div>
 
           <div style={{ ...labelStyle, marginBottom: 6 }}>Factors</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {prediction.factors.map(f => {
+            {activePrediction.factors.map(f => {
               const inactive = isInactive(f.status);
               return (
                 <div key={f.name} style={{ fontSize: '0.75rem', opacity: inactive ? 0.45 : 1 }}>
@@ -252,7 +287,7 @@ export default function PredictionPanel({
             })}
           </div>
           <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 12 }}>
-            Paper-mode rule-based prediction. Not financial advice.
+            Paper-mode rule-based prediction. Auto-refresh every 60s (forced rebuild). Not financial advice.
           </div>
         </>
       )}

@@ -65,7 +65,7 @@ class PremarketAnalyzerService:
         if conflicting:
             confidence = round(max(35.0, confidence - 12.0), 1)
 
-        action = self._engines.scorer.recommend(sentiment, confidence, vix, nifty, conflicting)
+        recommendation = self._engines.scorer.recommend(sentiment, confidence, vix, nifty, conflicting)
         warnings = self._warnings(gift, vix, breadth, nifty, excluded)
         return PremarketReport(
             report_date=now.date(),
@@ -75,7 +75,8 @@ class PremarketAnalyzerService:
             overall_sentiment=sentiment,
             heuristic_confidence=confidence,
             directional_score=directional,
-            recommended_action=action,
+            recommended_action=recommendation.action,
+            wait_trigger=recommendation.wait_trigger,
             global_markets=global_markets,
             gift_nifty=gift,
             india_vix=vix,

@@ -20,7 +20,10 @@ class InstrumentCatalog:
                 symbol="^NSEBANK", name="BANK NIFTY", kind=InstrumentKind.INDEX,
                 lot_size=settings.banknifty_lot_size, option_underlying=OptionUnderlying.BANKNIFTY,
             ),
-            Instrument(symbol="^BSESN", name="SENSEX", kind=InstrumentKind.INDEX, lot_size=settings.sensex_lot_size),
+            Instrument(
+                symbol="^BSESN", name="SENSEX", kind=InstrumentKind.INDEX,
+                lot_size=settings.sensex_lot_size, option_underlying=OptionUnderlying.SENSEX,
+            ),
         ]
         stocks = [
             Instrument(symbol=s["symbol"], name=s["name"], kind=InstrumentKind.STOCK, lot_size=STOCK_LOT_SIZE)

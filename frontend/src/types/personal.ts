@@ -1,6 +1,7 @@
 export type TradeAction = 'BUY' | 'SELL';
 export type TradeType = 'PAPER' | 'MANUAL';
 export type TradeStatus = 'OPEN' | 'CLOSED';
+export type OrderSource = 'SYSTEM_SIGNAL' | 'MANUAL_OVERRIDE' | 'LEGACY';
 
 export interface PersonalTrade {
   id: number;
@@ -18,8 +19,16 @@ export interface PersonalTrade {
   current_price: number | null;
   stop_loss: number | null;
   target_1: number | null;
+  target_2: number | null;
   pnl: number;
   pnl_pct: number;
+  order_source: OrderSource;
+  override_reason: string | null;
+  holding_days: number | null;
+  confidence_at_entry: number | null;
+  market_regime_at_entry: string | null;
+  points_gained: number | null;
+  tags: Record<string, any> | null;
 }
 
 export interface DailyTradeSummary {

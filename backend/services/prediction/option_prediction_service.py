@@ -7,6 +7,7 @@ import pytz
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.options import OptionChain, OptionType, OptionUnderlying
+from schemas.premarket import BreadthSnapshot, IndiaVixSnapshot
 from schemas.prediction import (
     ChartStructureFeatures,
     GateReason,
@@ -16,6 +17,7 @@ from schemas.prediction import (
     ShadowFeatures,
     SuggestedContract,
 )
+from schemas.trading import Tick
 from services.options.option_chain_service import UNDERLYING_SPOT_SYMBOLS, OptionChainService
 from services.prediction.prediction_dependencies import PredictionAnalyzers, PredictionSources
 from services.prediction.prediction_log_recorder import PredictionLogRecorder
@@ -89,47 +91,20 @@ class OptionPredictionService:
         request_at = datetime.now(timezone.utc)
         today = request_at.astimezone(IST).date()
 
-        gather_tasks = [
-            self._chain_service.get_chain(underlying, expiry),
-            self._sources.agents.get(spot_symbol),
-            self._sources.indicators.get(spot_symbol),
-            self._sources.premarket.bundle(request_at),
-            self._market_data.get_tick(spot_symbol),
-        ]
-        chain, consensus, indicators, premarket, spot_tick = await asyncio.gather(*gather_tasks)
+        # Angel spot must win the rate-limit queue before the option-chain quote flood.
+        spot_tick = await self._spot_tick_for_freshness(spot_symbol)
 
-        indicators_15m: Optional[IntradayIndicators] = None
-        if self._sources.indicators_15m is not None:
-            try:
-                indicators_15m = await self._sources.indicators_15m.get(spot_symbol)
-            except Exception:
-                indicators_15m = None
-
-        vix_snapshot = None
-        if self._sources.vix is not None:
-            try:
-                vix_snapshot = await self._sources.vix.collect()
-            except Exception:
-                vix_snapshot = None
-
-        breadth_snapshot = None
-        try:
-            from services.market_data import market_data_service
-            from schemas.premarket import BreadthSnapshot
-            raw_breadth = await market_data_service.get_market_breadth()
-            breadth_snapshot = BreadthSnapshot(
-                available=True,
-                advancing=raw_breadth.get("advancing", 0),
-                declining=raw_breadth.get("declining", 0),
-                unchanged=raw_breadth.get("unchanged", 0),
-                advance_decline_ratio=raw_breadth.get("advance_decline_ratio", 1.0),
-                advancing_pct=round(
-                    raw_breadth.get("advancing", 0) / max(raw_breadth.get("total", 1), 1) * 100, 1
-                ),
-                session_label="INTRADAY",
+        chain, consensus, indicators, premarket, indicators_15m, vix_snapshot, breadth_snapshot = (
+            await asyncio.gather(
+                self._chain_service.get_chain(underlying, expiry),
+                self._sources.agents.get(spot_symbol),
+                self._sources.indicators.get(spot_symbol),
+                self._sources.premarket.bundle(request_at),
+                self._optional_indicators_15m(spot_symbol),
+                self._optional_vix(),
+                self._optional_breadth(),
             )
-        except Exception:
-            breadth_snapshot = None
+        )
 
         # Freshness boundary: clock taken after quotes/ticks are in hand.
         evaluated_at = datetime.now(timezone.utc)
@@ -199,6 +174,10 @@ class OptionPredictionService:
         regime = self._analyzers.regime.classify(indicators.adx, vix_snapshot, chain_shadow.atm_iv)
         regime = regime.model_copy(update={"adx_multiplier": adx_mult})
 
+        freshness_diagnostics = None
+        if gate_reason in (GateReason.STALE_DATA, GateReason.UNKNOWN_FRESHNESS):
+            freshness_diagnostics = market.quotes
+
         return OptionPrediction(
             underlying=underlying,
             expiry=expiry,
@@ -228,7 +207,50 @@ class OptionPredictionService:
                 futures=self._sources.futures.latest(underlying),
                 chart=chart_shadow,
             ),
+            premarket_action=premarket.recommended_action.value,
+            premarket_generated_at=premarket.generated_at,
+            premarket_wait_trigger=premarket.wait_trigger.value,
+            freshness_diagnostics=freshness_diagnostics,
         )
+
+    async def _spot_tick_for_freshness(self, symbol: str) -> Tick:
+        """Angel only — Yahoo fetch-time ticks must not enter the freshness gate."""
+        return await self._market_data.get_preferred_tick(symbol)
+
+    async def _optional_indicators_15m(self, symbol: str) -> Optional[IntradayIndicators]:
+        if self._sources.indicators_15m is None:
+            return None
+        try:
+            return await self._sources.indicators_15m.get(symbol)
+        except Exception:
+            return None
+
+    async def _optional_vix(self) -> Optional[IndiaVixSnapshot]:
+        if self._sources.vix is None:
+            return None
+        try:
+            return await self._sources.vix.collect()
+        except Exception:
+            return None
+
+    async def _optional_breadth(self) -> Optional[BreadthSnapshot]:
+        try:
+            from services.market_data import market_data_service
+
+            raw_breadth = await market_data_service.get_market_breadth()
+            return BreadthSnapshot(
+                available=True,
+                advancing=raw_breadth.get("advancing", 0),
+                declining=raw_breadth.get("declining", 0),
+                unchanged=raw_breadth.get("unchanged", 0),
+                advance_decline_ratio=raw_breadth.get("advance_decline_ratio", 1.0),
+                advancing_pct=round(
+                    raw_breadth.get("advancing", 0) / max(raw_breadth.get("total", 1), 1) * 100, 1
+                ),
+                session_label="INTRADAY",
+            )
+        except Exception:
+            return None
 
     async def _chart_shadow(
         self, symbol: str, indicators: IntradayIndicators, now: datetime
