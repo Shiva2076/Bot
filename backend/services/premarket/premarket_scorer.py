@@ -1,7 +1,13 @@
-from typing import List, Tuple
+from typing import List, NamedTuple, Tuple
 
 from schemas.premarket import MarketSentiment, PremarketFactor, RecommendedAction, VolatilityBand
 from schemas.premarket import IndiaVixSnapshot, NiftyOpeningContext
+from schemas.premarket_wait_trigger import PremarketWaitTrigger
+
+
+class PremarketRecommendation(NamedTuple):
+    action: RecommendedAction
+    wait_trigger: PremarketWaitTrigger
 
 
 class PremarketScorer:
@@ -41,15 +47,19 @@ class PremarketScorer:
         vix: IndiaVixSnapshot,
         nifty: NiftyOpeningContext,
         conflicting: bool,
-    ) -> RecommendedAction:
+    ) -> PremarketRecommendation:
         if sentiment == MarketSentiment.INSUFFICIENT_DATA:
-            return RecommendedAction.NO_TRADE
+            return PremarketRecommendation(RecommendedAction.NO_TRADE, PremarketWaitTrigger.NONE)
         if nifty.available and nifty.gap_pct is not None and abs(nifty.gap_pct) >= self._large_gap_pct:
-            return RecommendedAction.WAIT
+            return PremarketRecommendation(RecommendedAction.WAIT, PremarketWaitTrigger.LARGE_GAP)
         if vix.available and vix.band == VolatilityBand.HIGH:
-            return RecommendedAction.WAIT if confidence >= 55 else RecommendedAction.NO_TRADE
-        if conflicting or confidence < 55:
-            return RecommendedAction.WAIT
+            if confidence >= 55:
+                return PremarketRecommendation(RecommendedAction.WAIT, PremarketWaitTrigger.HIGH_VIX)
+            return PremarketRecommendation(RecommendedAction.NO_TRADE, PremarketWaitTrigger.HIGH_VIX)
+        if conflicting:
+            return PremarketRecommendation(RecommendedAction.WAIT, PremarketWaitTrigger.CONFLICT)
+        if confidence < 55:
+            return PremarketRecommendation(RecommendedAction.WAIT, PremarketWaitTrigger.LOW_CONFIDENCE)
         if sentiment in {MarketSentiment.BULLISH, MarketSentiment.BEARISH} and confidence >= 55:
-            return RecommendedAction.WATCH
-        return RecommendedAction.WAIT
+            return PremarketRecommendation(RecommendedAction.WATCH, PremarketWaitTrigger.NONE)
+        return PremarketRecommendation(RecommendedAction.WAIT, PremarketWaitTrigger.DEFAULT)

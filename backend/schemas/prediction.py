@@ -42,6 +42,7 @@ class DataFreshness(str, Enum):
     STALE = "STALE"
     UNKNOWN = "UNKNOWN"
     MARKET_CLOSED = "MARKET_CLOSED"
+    NOT_EVALUATED = "NOT_EVALUATED"
 
 
 class FactorBias(str, Enum):
@@ -389,6 +390,14 @@ class ShadowFeatures(BaseModel):
     chart: Optional[ChartStructureFeatures] = None
 
 
+class FreshnessRejectReason(str, Enum):
+    MISSING = "missing"
+    IMPLAUSIBLE = "implausible"
+    FUTURE = "future"
+    STALE = "stale"
+    OK = "ok"
+
+
 class QuoteFreshness(BaseModel):
     symbol: str
     exchange_timestamp: Optional[datetime]
@@ -399,6 +408,10 @@ class QuoteFreshness(BaseModel):
     freshness: DataFreshness
     basis: FreshnessBasis
     verified: bool
+    timestamp_field: Optional[str] = None
+    raw_value: Optional[str] = None
+    parsed_value: Optional[str] = None
+    reject_reason: Optional[FreshnessRejectReason] = None
 
 
 class PremiumLevels(BaseModel):
@@ -440,3 +453,7 @@ class OptionPrediction(BaseModel):
     regime: RegimeSnapshot
     shadow: ShadowFeatures
     log_id: Optional[int] = None
+    premarket_action: Optional[str] = None
+    premarket_generated_at: Optional[datetime] = None
+    premarket_wait_trigger: Optional[str] = None
+    freshness_diagnostics: Optional[List[QuoteFreshness]] = None

@@ -1,6 +1,14 @@
 """Portfolio, trades, news, backtest, sectors routers."""
-from fastapi import Depends, APIRouter
+from fastapi import Depends, APIRouter, HTTPException
+from routers.trading import get_order_service
+from schemas.order_entry import EntryOrigin
+from schemas.personal_trade import PersonalTradeView
+from schemas.trading import PortfolioOpenRequest
 from services.auth.api_key_auth import require_api_key
+from services.personal.errors import TradeValidationError
+from services.trading.errors import MarketDataUnavailableError, UnknownInstrumentError
+from services.trading.order_service import OrderService
+from services.trading.providers import portfolio_order_mapper
 from services.paper_trading import paper_trading
 from services.market_data import market_data_service
 from services.news_aggregator import get_news_with_sentiment
@@ -27,12 +35,20 @@ async def get_positions():
     return {"positions": await paper_trading.get_positions()}
 
 
-@router.post("/open/{symbol}")
-async def open_position(symbol: str, signal: dict):
-    quote = await market_data_service.fetch_live_quote(symbol)
-    if not quote:
-        return {"error": "Could not fetch price"}
-    return await paper_trading.open_position(symbol, signal, quote["price"])
+@router.post("/open/{symbol}", response_model=PersonalTradeView)
+async def open_position(
+    symbol: str,
+    request: PortfolioOpenRequest,
+    service: OrderService = Depends(get_order_service),
+):
+    try:
+        return await service.place(portfolio_order_mapper.to_market_order(symbol, request), EntryOrigin.API)
+    except UnknownInstrumentError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except TradeValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except MarketDataUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @router.post("/close/{symbol}")

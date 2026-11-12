@@ -1,8 +1,9 @@
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, TrendingUp, Briefcase, Newspaper,
-  History, BookOpen, BarChart2, Zap, Activity, User, CandlestickChart
+  History, BookOpen, BarChart2, User, CandlestickChart
 } from 'lucide-react';
+import PersistentRoute from './components/PersistentRoute';
 import Dashboard from './pages/Dashboard';
 import Watchlist from './pages/Watchlist';
 import Portfolio from './pages/Portfolio';
@@ -61,24 +62,41 @@ function Sidebar() {
   );
 }
 
+function MainContent() {
+  const { pathname } = useLocation();
+  const tradeActive = pathname === '/trade';
+  const personalActive = pathname === '/personal';
+  const showEphemeral = !tradeActive && !personalActive;
+
+  return (
+    <main className="main-content">
+      <PersistentRoute active={tradeActive}>
+        <Trade />
+      </PersistentRoute>
+      <PersistentRoute active={personalActive}>
+        <Personal />
+      </PersistentRoute>
+      {showEphemeral && (
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/watchlist" element={<Watchlist />} />
+          <Route path="/portfolio" element={<Portfolio />} />
+          <Route path="/news" element={<News />} />
+          <Route path="/history" element={<TradeHistory />} />
+          <Route path="/journal" element={<Journal />} />
+          <Route path="/backtest" element={<Backtest />} />
+        </Routes>
+      )}
+    </main>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <div className="app-layout">
         <Sidebar />
-        <main className="main-content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/watchlist" element={<Watchlist />} />
-            <Route path="/portfolio" element={<Portfolio />} />
-            <Route path="/news" element={<News />} />
-            <Route path="/history" element={<TradeHistory />} />
-            <Route path="/journal" element={<Journal />} />
-            <Route path="/backtest" element={<Backtest />} />
-            <Route path="/trade" element={<Trade />} />
-            <Route path="/personal" element={<Personal />} />
-          </Routes>
-        </main>
+        <MainContent />
       </div>
     </BrowserRouter>
   );

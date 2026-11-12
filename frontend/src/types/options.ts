@@ -1,4 +1,4 @@
-export type OptionUnderlying = 'NIFTY' | 'BANKNIFTY';
+export type OptionUnderlying = 'NIFTY' | 'BANKNIFTY' | 'SENSEX';
 
 export interface OptionQuote {
   symbol: string;

@@ -19,7 +19,7 @@ class OrderValidator:
             raise TradeValidationError(f"Target must be {side} the current price ₹{ltp}")
 
     def validate_exit(self, trade: Trade) -> None:
-        if trade.trade_type != TradeType.MANUAL.value:
-            raise TradeValidationError("Paper trades are closed from the Portfolio page")
+        if trade.trade_type not in (TradeType.MANUAL.value, TradeType.PAPER.value):
+            raise TradeValidationError("Unsupported trade type for exit")
         if trade.status != TradeStatus.OPEN.value:
             raise TradeValidationError("Trade is already closed")

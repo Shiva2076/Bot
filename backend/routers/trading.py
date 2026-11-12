@@ -1,12 +1,16 @@
+from datetime import date
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from repositories.trade_repository import TradeRepository
+from schemas.options import OptionUnderlying
+from schemas.order_entry import EntryOrigin
 from schemas.personal_trade import PersonalTradeView
 from schemas.prediction import ChartStructureFeatures
+from schemas.trade_decision import TradeDecisionResponse
 from schemas.trading import CandleInterval, CandleSeries, Instrument, MarketOrderRequest, OpenPositionsResponse, Tick
 from services.auth.api_key_auth import require_api_key
 from services.personal.errors import TradeNotFoundError, TradeValidationError
@@ -21,11 +25,11 @@ from services.trading.providers import (
     instrument_catalog,
     instrument_resolver,
     market_data,
+    order_entry_gates,
     paper_cost_calculator,
     pre_trade_risk_gate,
-    premarket_analyzer_service,
+    trade_decision_service,
 )
-from config import settings
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
@@ -40,14 +44,32 @@ def get_order_service(session: AsyncSession = Depends(get_db)) -> OrderService:
         risk_gate=pre_trade_risk_gate,
         costs=paper_cost_calculator,
         daily_risk=daily_risk_state,
-        premarket=premarket_analyzer_service,
-        enforce_premarket_gate=settings.risk_enforce_premarket_gate,
+        gates=order_entry_gates,
     )
 
 
 @router.get("/instruments", response_model=List[Instrument])
 async def get_instruments():
     return instrument_catalog.list_all()
+
+
+@router.get("/decision", response_model=TradeDecisionResponse)
+async def get_trade_decision(
+    underlying: OptionUnderlying,
+    expiry: date,
+    force: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Unified TRADE / NO_TRADE header. Not an order authorization token;
+    OrderService.place revalidates every gate on submit.
+    """
+    try:
+        return await trade_decision_service.evaluate(underlying, expiry, db, force=force)
+    except UnknownInstrumentError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except MarketDataUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @router.get("/tick", response_model=Tick)
@@ -96,7 +118,7 @@ async def get_positions(service: OrderService = Depends(get_order_service)):
 @router.post("/orders", response_model=PersonalTradeView)
 async def place_order(request: MarketOrderRequest, service: OrderService = Depends(get_order_service)):
     try:
-        return await service.place(request)
+        return await service.place(request, EntryOrigin.API)
     except UnknownInstrumentError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except TradeValidationError as e:

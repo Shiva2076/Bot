@@ -24,7 +24,7 @@ export type GateReason =
   | 'INVALID_DATA'
   | 'LOW_SIGNAL_SCORE'
   | 'EXPIRY_PRE_CLOSE';
-export type DataFreshness = 'FRESH' | 'STALE' | 'UNKNOWN' | 'MARKET_CLOSED';
+export type DataFreshness = 'FRESH' | 'STALE' | 'UNKNOWN' | 'MARKET_CLOSED' | 'NOT_EVALUATED';
 export type FreshnessBasis = 'EXCHANGE' | 'FETCH' | 'UNKNOWN';
 
 export interface PredictionFactor {

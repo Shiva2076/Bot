@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { marketAPI, signalsAPI, portfolioAPI } from '../api/client';
 import { Zap, RefreshCw, TrendingUp, TrendingDown, Minus, ChevronRight } from 'lucide-react';
+import { apiErrorMessage } from '../utils/api-error';
+import { OVERRIDE_REASON_MAX_LENGTH, overrideReasonError } from '../utils/overrideReason';
 
 const SIGNAL_COLORS = {
   BUY: 'var(--buy)',
@@ -101,12 +103,26 @@ export default function Watchlist() {
   const [view, setView] = useState<'table' | 'cards'>('table');
 
   const handleTrade = async (symbol: string, signal: any) => {
+    const reason = window.prompt(
+      `Manual override reason for ${symbol} (required, max ${OVERRIDE_REASON_MAX_LENGTH} characters)`,
+    );
+    if (reason === null) return;
+    const reasonError = overrideReasonError(reason);
+    if (reasonError) {
+      alert(reasonError);
+      return;
+    }
     try {
-      await portfolioAPI.openPosition(symbol, signal);
-      alert(`Trade executed for ${symbol}! Check your Portfolio.`);
+      const res = await portfolioAPI.openPosition(symbol, {
+        action: String(signal.action).includes('BUY') ? 'BUY' : 'SELL',
+        entry: Number(signal.entry),
+        stop_loss: Number(signal.stop_loss),
+        target: signal.target_1 ?? null,
+        override_reason: reason.trim(),
+      });
+      alert(`Paper trade placed for ${symbol}: ${res.data.quantity} @ ₹${res.data.entry_price.toFixed(2)} (${res.data.order_source}).`);
     } catch (e) {
-      console.error(e);
-      alert(`Failed to execute trade for ${symbol}.`);
+      alert(`Failed to execute trade for ${symbol}: ${apiErrorMessage(e)}`);
     }
   };
 

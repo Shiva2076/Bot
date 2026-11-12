@@ -14,6 +14,7 @@ from services.options.black_scholes_model import BlackScholesModel
 from services.options.expiry_settlement_policy import ExpirySettlementPolicy
 from services.options.option_chain_service import OptionChainService
 from services.options.option_greeks_enricher import OptionGreeksEnricher
+from services.options.option_contract_resolver import OptionContractResolver
 from services.options.option_symbol_parser import OptionSymbolParser
 from schemas.costs import CostConfig
 from services.costs.paper_cost_calculator import PaperCostCalculator
@@ -75,9 +76,16 @@ from services.prediction.vix_factor_analyzer import VixFactorAnalyzer
 from services.snapshots.market_snapshot_mapper import MarketSnapshotMapper
 from services.snapshots.market_snapshot_monitor import MarketSnapshotMonitor
 from services.snapshots.market_snapshot_recorder import MarketSnapshotDependencies, MarketSnapshotRecorder
+from services.trading.actionable_signal_matcher import ActionableSignalMatcher, PredictionGateSnapshotMapper
+from services.trading.entry_session_gate import EntrySessionGate
 from services.trading.failover_market_data import FailoverMarketData
 from services.trading.instrument_catalog import InstrumentCatalog
 from services.trading.instrument_resolver import InstrumentResolver
+from services.trading.order_entry_gates import OrderEntryGates
+from services.trading.order_source_classifier import OrderSourceClassifier
+from services.trading.portfolio_order_mapper import PortfolioOrderMapper
+from services.trading.trade_decision_evaluator import TradeDecisionEvaluator
+from services.trading.trade_decision_service import TradeDecisionService
 from services.trading.risk_monitor import RiskMonitor
 from services.trading.stop_target_evaluator import StopTargetEvaluator
 from services.trading.yahoo_provider import YahooProvider
@@ -89,6 +97,7 @@ http_client = httpx.AsyncClient(timeout=15)
 option_symbol_parser = OptionSymbolParser()
 angel_quote_mapper = AngelQuoteMapper()
 angel_master = AngelInstrumentMaster(http_client, option_symbol_parser)
+option_contract_resolver = OptionContractResolver(option_symbol_parser, angel_master)
 angel_provider = AngelProvider(
     session=AngelSession(
         AngelCredentials(
@@ -109,6 +118,8 @@ angel_provider = AngelProvider(
     quote_cache_seconds=settings.angel_quote_cache_seconds,
 )
 
+# Angel preferred; Yahoo fills gaps for charts/quotes. Orders still require a verified
+# exchange timestamp (PreTradeRiskGate rejects Yahoo fetch-time-only ticks).
 market_data = FailoverMarketData([angel_provider, YahooProvider(settings.tick_cache_seconds)])
 instrument_catalog = InstrumentCatalog(settings)
 instrument_resolver = InstrumentResolver(instrument_catalog, angel_master)
@@ -125,6 +136,7 @@ option_chain_service = OptionChainService(
 strike_window_policy = StrikeWindowPolicy({
     OptionUnderlying.NIFTY: settings.prediction_strike_window_nifty,
     OptionUnderlying.BANKNIFTY: settings.prediction_strike_window_banknifty,
+    OptionUnderlying.SENSEX: settings.prediction_strike_window_sensex,
 })
 chain_shadow_calculator = ChainShadowCalculator(strike_window_policy)
 chart_structure_shadow_calculator = ChartStructureFactory.shadow_calculator(
@@ -141,7 +153,10 @@ chart_structure_query_service = ChartStructureQueryService(
     session_ranges=session_range_calculator,
 )
 
-trading_calendar = TradingCalendar(TradingCalendar.parse_holidays(settings.premarket_nse_holidays))
+trading_calendar = TradingCalendar(
+    TradingCalendar.parse_holidays(settings.premarket_nse_holidays),
+    TradingCalendar.parse_special_sessions(settings.nse_special_sessions),
+)
 sentiment_classifier = SentimentClassifier(
     settings.premarket_sentiment_bullish_pct,
     settings.premarket_sentiment_bearish_pct,
@@ -285,10 +300,30 @@ pre_trade_risk_gate = PreTradeRiskGate(
 )
 daily_risk_state = DailyRiskState()
 position_sizer = PositionSizer(settings.risk_per_trade_pct)
+portfolio_order_mapper = PortfolioOrderMapper(position_sizer)
+entry_session_gate = EntrySessionGate(trading_calendar)
+order_entry_gates = OrderEntryGates(
+    session=entry_session_gate,
+    premarket=premarket_analyzer_service,
+    signals=ActionableSignalMatcher(
+        option_prediction_service, option_contract_resolver, PredictionGateSnapshotMapper()
+    ),
+    classifier=OrderSourceClassifier(),
+)
+trade_decision_service = TradeDecisionService(
+    predictions=option_prediction_service,
+    premarket=premarket_analyzer_service,
+    session_gate=entry_session_gate,
+    evaluator=TradeDecisionEvaluator(),
+    daily_risk=daily_risk_state,
+    max_open_positions=settings.risk_max_open_positions,
+    daily_loss_limit_pct=settings.risk_daily_loss_limit_pct,
+    starting_capital=settings.starting_capital,
+)
 risk_monitor = RiskMonitor(
     market_data=market_data,
     evaluator=StopTargetEvaluator(),
-    parser=option_symbol_parser,
+    contracts=option_contract_resolver,
     expiry_policy=ExpirySettlementPolicy(),
     mapper=PersonalTradeMapper(PnlCalculator()),
     costs=paper_cost_calculator,

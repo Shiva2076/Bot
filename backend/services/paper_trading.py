@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, List
 import pytz
 from config import settings
-from schemas.personal_trade import PaperTradeOpened, TradeExitRequest
+from schemas.personal_trade import TradeExitRequest
 from services.personal.paper_trade_recorder import paper_trade_recorder
 
 IST = pytz.timezone("Asia/Kolkata")
@@ -41,66 +41,6 @@ class PaperTradingService:
 
     async def get_trade_history(self) -> List[Dict]:
         return _db["trades"]
-
-    async def open_position(self, symbol: str, signal: Dict, current_price: float) -> Dict:
-        """Open a paper trade position."""
-        portfolio = await self.get_portfolio()
-        positions = await self.get_positions()
-
-        # Check if position already exists
-        if any(p["symbol"] == symbol for p in positions):
-            return {"error": f"Position already open for {symbol}"}
-
-        # Calculate position size (2% risk per trade)
-        cash = portfolio["cash"]
-        atr = signal.get("raw", {}).get("ta", {}).get("atr", current_price * 0.015)
-        sl_distance = current_price - (signal.get("stop_loss") or current_price * 0.98)
-        sl_distance = max(sl_distance, current_price * 0.01)
-        risk_amount = cash * 0.02
-        quantity = max(1, int(risk_amount / sl_distance))
-        invested = quantity * current_price
-
-        if invested > cash:
-            quantity = max(1, int(cash * 0.95 / current_price))
-            invested = quantity * current_price
-
-        if invested > cash:
-            return {"error": "Insufficient funds"}
-
-        position = {
-            "id": f"{symbol}_{int(datetime.now().timestamp())}",
-            "symbol": symbol,
-            "quantity": quantity,
-            "entry_price": round(current_price, 2),
-            "current_price": round(current_price, 2),
-            "invested": round(invested, 2),
-            "stop_loss": signal.get("stop_loss"),
-            "target_1": signal.get("target_1"),
-            "target_2": signal.get("target_2"),
-            "unrealized_pnl": 0,
-            "unrealized_pnl_pct": 0,
-            "confidence": signal.get("confidence"),
-            "market_regime": signal.get("market_regime"),
-            "entry_time": datetime.now(IST).isoformat(),
-            "status": "OPEN",
-        }
-
-        position["trade_id"] = await paper_trade_recorder.record_open(PaperTradeOpened(
-            symbol=symbol,
-            quantity=quantity,
-            entry_price=position["entry_price"],
-            invested_amount=position["invested"],
-            stop_loss=position["stop_loss"],
-            target_1=position["target_1"],
-            target_2=position["target_2"],
-            confidence=position["confidence"],
-            market_regime=position["market_regime"],
-        ))
-
-        positions.append(position)
-        portfolio["cash"] = round(cash - invested, 2)
-        portfolio["total_invested"] = round(portfolio["total_invested"] + invested, 2)
-        return {"success": True, "position": position}
 
     async def close_position(self, symbol: str, current_price: float, reason: str = "MANUAL") -> Dict:
         """Close an open paper trade."""

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DependencyList } from 'react';
+import { useRouteActive } from './routeActivity';
 
 function useTabVisible() {
   const [visible, setVisible] = useState(() => typeof document === 'undefined' || document.visibilityState === 'visible');
@@ -13,16 +14,25 @@ function useTabVisible() {
 
 export function usePolling(callback: () => Promise<void>, intervalMs: number, deps: DependencyList, enabled = true) {
   const inFlight = useRef(false);
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
   const tabVisible = useTabVisible();
+  const routeActive = useRouteActive();
+  const active = enabled && tabVisible && routeActive;
+
   useEffect(() => {
-    if (!enabled || !tabVisible) return;
+    if (!active) return;
     const run = async () => {
       if (inFlight.current || document.visibilityState !== 'visible') return;
       inFlight.current = true;
-      try { await callback(); } finally { inFlight.current = false; }
+      try {
+        await callbackRef.current();
+      } finally {
+        inFlight.current = false;
+      }
     };
     run();
     const timer = setInterval(run, intervalMs);
     return () => clearInterval(timer);
-  }, [...deps, enabled, tabVisible]);
+  }, [...deps, active, intervalMs]);
 }

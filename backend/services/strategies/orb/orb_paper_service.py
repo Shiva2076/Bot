@@ -5,6 +5,7 @@ from config import settings
 from repositories.strategy_signal_repository import StrategySignalRepository
 from repositories.trade_repository import TradeRepository
 from schemas.orb import OrbDecision, OrbEvaluateRequest, OrbExecuteResponse, OrbSignal
+from schemas.order_entry import EntryOrigin
 from schemas.personal_trade import TradeType
 from schemas.trading import CandleInterval, MarketOrderRequest
 from services.strategies.orb.orb_signal_engine import OrbSignalEngine
@@ -62,7 +63,8 @@ class OrbPaperService:
                     lots=lots,
                     stop_loss=signal.stop_loss,
                     target=signal.target,
-                )
+                ),
+                EntryOrigin.ORB_STRATEGY,
             )
         except TradeValidationError as e:
             reasons = str(e).split("; ")

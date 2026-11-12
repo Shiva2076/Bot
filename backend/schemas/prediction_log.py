@@ -45,6 +45,11 @@ class PredictionLogCreate(BaseModel):
     cluster_scores: Dict[str, Any]
     regime: Dict[str, Any]
     shadow_features: Dict[str, Any]
+    gate_reason: Optional[str]
+    premarket_action: Optional[str]
+    premarket_generated_at: Optional[datetime]
+    premarket_wait_trigger: Optional[str]
+    freshness_diagnostics: Optional[List[Dict[str, Any]]]
     contract_symbol: Optional[str]
     contract_strike: Optional[float]
     contract_option_type: Optional[OptionType]
@@ -91,6 +96,11 @@ class PredictionLogView(BaseModel):
     cluster_scores: Optional[Dict[str, Any]]
     regime: Optional[Dict[str, Any]]
     shadow_features: Optional[Dict[str, Any]]
+    gate_reason: Optional[str] = None
+    premarket_action: Optional[str] = None
+    premarket_generated_at: Optional[datetime] = None
+    premarket_wait_trigger: Optional[str] = None
+    freshness_diagnostics: Optional[List[Dict[str, Any]]] = None
     contract_symbol: Optional[str]
     contract_strike: Optional[float]
     contract_option_type: Optional[str]

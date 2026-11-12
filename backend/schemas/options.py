@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class OptionUnderlying(str, Enum):
     NIFTY = "NIFTY"
     BANKNIFTY = "BANKNIFTY"
+    SENSEX = "SENSEX"
 
 
 class OptionType(str, Enum):

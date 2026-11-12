@@ -2,9 +2,10 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.options import OptionUnderlying
+from schemas.order_entry import OverrideReason
 from schemas.personal_trade import PersonalTradeView, TradeAction
 
 
@@ -65,11 +66,24 @@ class CandleSeries(BaseModel):
 
 
 class MarketOrderRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     symbol: str = Field(min_length=1, max_length=40)
     action: TradeAction
     lots: int = Field(gt=0)
     stop_loss: Optional[float] = Field(default=None, gt=0)
     target: Optional[float] = Field(default=None, gt=0)
+    override_reason: Optional[OverrideReason] = None
+
+
+class PortfolioOpenRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: TradeAction
+    entry: float = Field(gt=0, description="Signal entry estimate used only for position sizing")
+    stop_loss: float = Field(gt=0)
+    target: Optional[float] = Field(default=None, gt=0)
+    override_reason: Optional[OverrideReason] = None
 
 
 class OpenPositionsResponse(BaseModel):

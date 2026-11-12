@@ -31,6 +31,11 @@ class PredictionLogRepository:
             cluster_scores=payload.cluster_scores,
             regime=payload.regime,
             shadow_features=payload.shadow_features,
+            gate_reason=payload.gate_reason,
+            premarket_action=payload.premarket_action,
+            premarket_generated_at=payload.premarket_generated_at,
+            premarket_wait_trigger=payload.premarket_wait_trigger,
+            freshness_diagnostics=payload.freshness_diagnostics,
             contract_symbol=payload.contract_symbol,
             contract_strike=payload.contract_strike,
             contract_option_type=None

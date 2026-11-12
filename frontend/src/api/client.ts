@@ -3,7 +3,16 @@ import type { OptionChain, OptionExpiries, OptionUnderlying } from '../types/opt
 import type { PersonalHistory, PersonalTrade } from '../types/personal';
 import type { PremarketReport } from '../types/premarket';
 import type { ChartStructureFeatures, OptionPrediction } from '../types/prediction';
-import type { CandleInterval, CandleSeries, Instrument, MarketOrderRequest, OpenPositionsResponse, Tick } from '../types/trading';
+import type { TradeDecision } from '../types/tradeDecision';
+import type {
+  CandleInterval,
+  CandleSeries,
+  Instrument,
+  MarketOrderRequest,
+  OpenPositionsResponse,
+  PortfolioOpenRequest,
+  Tick,
+} from '../types/trading';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -33,8 +42,8 @@ export const signalsAPI = {
 export const portfolioAPI = {
   getSummary: () => api.get('/api/portfolio/summary'),
   getPositions: () => api.get('/api/portfolio/positions'),
-  openPosition: (symbol: string, signal: object) =>
-    api.post(`/api/portfolio/open/${symbol}`, signal),
+  openPosition: (symbol: string, request: PortfolioOpenRequest) =>
+    api.post<PersonalTrade>(`/api/portfolio/open/${symbol}`, request),
   closePosition: (symbol: string) => api.post(`/api/portfolio/close/${symbol}`),
 };
 
@@ -62,6 +71,11 @@ export const tradingAPI = {
   getPositions: () => api.get<OpenPositionsResponse>('/api/trading/positions'),
   placeOrder: (order: MarketOrderRequest) => api.post<PersonalTrade>('/api/trading/orders', order),
   exitPosition: (tradeId: number) => api.post<PersonalTrade>(`/api/trading/orders/${tradeId}/exit`),
+  getDecision: (underlying: OptionUnderlying, expiry: string, force = false) =>
+    api.get<TradeDecision>('/api/trading/decision', {
+      params: { underlying, expiry, force },
+      timeout: 45000,
+    }),
 };
 
 export const premarketAPI = {

@@ -65,13 +65,13 @@ class AngelQuoteMapper:
     def parse_exchange_timestamp(quote: AngelQuote) -> Optional[datetime]:
         """Parse Angel FULL-mode exchange times. Never invent a timestamp from fetch time."""
         for raw in (quote.exch_trade_time, quote.exch_feed_time):
-            parsed = AngelQuoteMapper._parse_angel_time(raw)
+            parsed = AngelQuoteMapper.parse_angel_time(raw)
             if parsed is not None:
                 return parsed
         return None
 
     @staticmethod
-    def _parse_angel_time(raw: Optional[str]) -> Optional[datetime]:
+    def parse_angel_time(raw: Optional[str]) -> Optional[datetime]:
         if raw is None or not str(raw).strip():
             return None
         text = str(raw).strip()

@@ -21,10 +21,10 @@ from services.trading.providers import (
     daily_risk_state,
     instrument_resolver,
     market_data,
+    order_entry_gates,
     paper_cost_calculator,
     position_sizer,
     pre_trade_risk_gate,
-    premarket_analyzer_service,
 )
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
@@ -39,8 +39,7 @@ def _orb_service(session: AsyncSession) -> OrbPaperService:
         risk_gate=pre_trade_risk_gate,
         costs=paper_cost_calculator,
         daily_risk=daily_risk_state,
-        premarket=premarket_analyzer_service,
-        enforce_premarket_gate=settings.risk_enforce_premarket_gate,
+        gates=order_entry_gates,
     )
     engine = OrbSignalEngine(
         OrbStrategyConfig(

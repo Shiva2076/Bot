@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from schemas.premarket import RecommendedAction
 from schemas.risk import PreTradeOrderContext, RiskGateDecision
 from services.costs.paper_cost_calculator import PaperCostCalculator
+from services.trading.exchange_timestamp_validator import ExchangeTimestampValidator
 
 
 class PreTradeRiskGate:
@@ -15,12 +16,14 @@ class PreTradeRiskGate:
         daily_loss_limit_pct: float,
         max_open_positions: int,
         cost_calculator: PaperCostCalculator,
+        max_data_age_setting_name: str = "risk_max_data_age_seconds",
     ):
         self._max_data_age_seconds = max_data_age_seconds
         self._max_risk_per_trade_pct = max_risk_per_trade_pct
         self._daily_loss_limit_pct = daily_loss_limit_pct
         self._max_open_positions = max_open_positions
         self._costs = cost_calculator
+        self._max_data_age_setting_name = max_data_age_setting_name
 
     def evaluate(self, context: PreTradeOrderContext) -> RiskGateDecision:
         reasons = []
@@ -32,12 +35,25 @@ class PreTradeRiskGate:
 
     def _data_checks(self, context: PreTradeOrderContext) -> list:
         reasons = []
-        ts = context.tick_timestamp
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
-        age = (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds()
-        if age > self._max_data_age_seconds:
-            reasons.append(f"Critical market data stale ({age:.0f}s > {self._max_data_age_seconds:.0f}s)")
+        exchange_ts = context.exchange_timestamp
+        if exchange_ts is None:
+            reasons.append(
+                f"Missing verified exchange timestamp from feed (provider: {context.tick_provider}; fetch time not permitted)"
+            )
+        elif not ExchangeTimestampValidator.is_plausible(exchange_ts):
+            reasons.append(f"Exchange timestamp implausible or corrupted ({exchange_ts})")
+        else:
+            if exchange_ts.tzinfo is None:
+                exchange_ts = exchange_ts.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            age = (now - exchange_ts.astimezone(timezone.utc)).total_seconds()
+            if age < 0:
+                age = 0.0
+            if age > self._max_data_age_seconds:
+                reasons.append(
+                    f"Exchange data stale ({age:.0f}s > {self._max_data_age_setting_name}={self._max_data_age_seconds:.0f}s)"
+                )
+
         if context.entry_price <= 0:
             reasons.append("Entry price missing or invalid")
         if context.quantity <= 0:

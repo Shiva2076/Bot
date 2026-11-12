@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from pydantic import AwareDatetime, BaseModel, Field
 
+from schemas.order_entry import OrderSource
+
 
 class TradeAction(str, Enum):
     BUY = "BUY"
@@ -24,18 +26,6 @@ class TradeExitRequest(BaseModel):
     exit_price: float = Field(ge=0)
     exit_time: AwareDatetime
     exit_reason: str = Field(default="MANUAL", min_length=1, max_length=50)
-
-
-class PaperTradeOpened(BaseModel):
-    symbol: str
-    quantity: int
-    entry_price: float
-    invested_amount: float
-    stop_loss: Optional[float]
-    target_1: Optional[float]
-    target_2: Optional[float]
-    confidence: Optional[float]
-    market_regime: Optional[str]
 
 
 class PnlResult(BaseModel):
@@ -59,8 +49,16 @@ class PersonalTradeView(BaseModel):
     current_price: Optional[float]
     stop_loss: Optional[float]
     target_1: Optional[float]
+    target_2: Optional[float] = None
     pnl: float
     pnl_pct: float
+    order_source: OrderSource
+    override_reason: Optional[str]
+    holding_days: Optional[int] = None
+    confidence_at_entry: Optional[float] = None
+    market_regime_at_entry: Optional[str] = None
+    points_gained: Optional[float] = None
+    tags: Optional[dict] = None
 
 
 class DailyTradeSummary(BaseModel):

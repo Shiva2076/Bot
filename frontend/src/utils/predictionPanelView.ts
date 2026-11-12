@@ -64,3 +64,43 @@ export function formatQuoteFreshnessLine(quote: QuoteFreshness): string {
       : '';
   return `${role} ${quote.symbol}: ${freshness} · ${verified} · basis ${basis}${when}${age}`;
 }
+
+/** Seconds since prediction.generated_at. Negative / NaN inputs yield null. */
+export function predictionSnapshotAgeSeconds(
+  generatedAt: string,
+  nowMs: number = Date.now(),
+): number | null {
+  const then = Date.parse(generatedAt);
+  if (Number.isNaN(then)) {
+    return null;
+  }
+  return Math.max(0, Math.floor((nowMs - then) / 1000));
+}
+
+/** True when the held snapshot is older than the auto-refresh budget. */
+export function isPredictionSnapshotStale(
+  ageSeconds: number | null,
+  staleAfterSeconds: number,
+): boolean {
+  if (ageSeconds === null) {
+    return false;
+  }
+  return ageSeconds > staleAfterSeconds;
+}
+
+export function formatPredictionSnapshotLabel(
+  generatedAt: string,
+  sessionStatus: string,
+  nowMs: number = Date.now(),
+): string {
+  const age = predictionSnapshotAgeSeconds(generatedAt, nowMs);
+  const when = new Date(generatedAt).toLocaleTimeString('en-IN');
+  if (age === null) {
+    return `Predicted ${when} · ${sessionStatus}`;
+  }
+  if (age < 60) {
+    return `Predicted ${when} · ${sessionStatus} · ${age}s ago`;
+  }
+  const minutes = Math.floor(age / 60);
+  return `Predicted ${when} · ${sessionStatus} · ${minutes}m ago`;
+}
