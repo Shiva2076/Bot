@@ -688,6 +688,11 @@ async def test_concurrent_order_placement_max_positions_limit():
             assert "Maximum open positions reached" in f[2]
 
 
+# These two tests run RiskMonitor against the real wall clock, so the contract must not be
+# expired at run time (the 27 Oct 2026 OPTION fixture would settle as EXPIRED, not SL_HIT).
+UNEXPIRED_OPTION_SYMBOL = "NIFTY28DEC6825000CE"  # expires 2068-12-28
+
+
 @pytest.mark.asyncio
 async def test_risk_monitor_persists_and_restores_unresolved_exposure_across_restart():
     """Verify that unresolved exposure is persisted to PostgreSQL and restored upon process restart."""
@@ -698,7 +703,7 @@ async def test_risk_monitor_persists_and_restores_unresolved_exposure_across_res
         async with AsyncSession(schema_engine, expire_on_commit=False) as session1:
             repo1 = TradeRepository(session1)
             trade = Trade(
-                symbol=OPTION.symbol, action="BUY", trade_type="PAPER",
+                symbol=UNEXPIRED_OPTION_SYMBOL, action="BUY", trade_type="PAPER",
                 status="OPEN", entry_price=100.0, quantity=65, invested_amount=6520.0,
                 stop_loss=90.0, target_1=120.0, entry_time=now - timedelta(minutes=20),
                 order_source="SYSTEM_SIGNAL", tags={"entry_fees": {"total_fees": 21.0}},
@@ -710,7 +715,7 @@ async def test_risk_monitor_persists_and_restores_unresolved_exposure_across_res
         # 2. RiskMonitor runs with STALE quote -> must defer exit and persist unresolved exposure to trade.tags
         stale_ts = now - timedelta(seconds=60)
         stale_tick = Tick(
-            symbol=OPTION.symbol, ltp=85.0, prev_close=100.0, change=-15.0, change_pct=-15.0,
+            symbol=UNEXPIRED_OPTION_SYMBOL, ltp=85.0, prev_close=100.0, change=-15.0, change_pct=-15.0,
             timestamp=now, provider="ANGEL", fetched_at=now, exchange_timestamp=stale_ts,
         )
 
@@ -740,7 +745,7 @@ async def test_risk_monitor_persists_and_restores_unresolved_exposure_across_res
 
         # 3. Process restart simulation: Create a brand new RiskMonitor instance with a FRESH quote
         fresh_tick = Tick(
-            symbol=OPTION.symbol, ltp=85.0, prev_close=100.0, change=-15.0, change_pct=-15.0,
+            symbol=UNEXPIRED_OPTION_SYMBOL, ltp=85.0, prev_close=100.0, change=-15.0, change_pct=-15.0,
             timestamp=now, provider="ANGEL", fetched_at=now, exchange_timestamp=now,
         )
         monitor_restarted = RiskMonitor(
@@ -774,7 +779,7 @@ async def test_concurrent_risk_monitor_check_once_does_not_double_close():
         async with AsyncSession(schema_engine, expire_on_commit=False) as session1:
             repo1 = TradeRepository(session1)
             trade = Trade(
-                symbol=OPTION.symbol, action="BUY", trade_type="PAPER",
+                symbol=UNEXPIRED_OPTION_SYMBOL, action="BUY", trade_type="PAPER",
                 status="OPEN", entry_price=100.0, quantity=65, invested_amount=6520.0,
                 stop_loss=90.0, target_1=120.0, entry_time=now - timedelta(minutes=20),
                 order_source="SYSTEM_SIGNAL", tags={"entry_fees": {"total_fees": 21.0}},
@@ -784,7 +789,7 @@ async def test_concurrent_risk_monitor_check_once_does_not_double_close():
             trade_id = trade.id
 
         fresh_tick = Tick(
-            symbol=OPTION.symbol, ltp=85.0, prev_close=100.0, change=-15.0, change_pct=-15.0,
+            symbol=UNEXPIRED_OPTION_SYMBOL, ltp=85.0, prev_close=100.0, change=-15.0, change_pct=-15.0,
             timestamp=now, provider="ANGEL", fetched_at=now, exchange_timestamp=now,
         )
 
