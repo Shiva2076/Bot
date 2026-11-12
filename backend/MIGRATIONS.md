@@ -37,6 +37,25 @@ alembic stamp head
 
 Only stamp when the live schema already matches this revision. Prefer `alembic upgrade head` on empty or partially migrated databases.
 
+## Revisions
+
+| Revision | Contents |
+|---|---|
+| `20261030_0001` | Initial schema (all tables before Phase 1 order safety). |
+| `20261112_0002` | Phase 1: `trades` order audit columns (`order_source` NOT NULL with CHECK, `override_reason`, `premarket_action_at_entry`, `prediction_gate_at_entry`), `trades.paper_signal_id` (+ partial unique index), `prediction_logs` gate/premarket/freshness columns, new tables `paper_signals` and `prediction_research_outcomes`. Existing trades are tagged `LEGACY`. |
+
+### Databases already patched by the Bot1 `create_tables()` bootstrap
+
+The Bot1 branch added the `20261112_0002` columns and tables at startup through `migrate_trade_order_audit`, `migrate_prediction_gate_logging` and `migrate_paper_engine`. Running `alembic upgrade head` on such a database fails with "column already exists". For those databases only:
+
+```bash
+cd backend
+alembic stamp 20261112_0002   # after confirming the columns/tables above exist
+alembic check                 # must report no new upgrade operations
+```
+
+Back up the database and run the upgrade on a copy first (`pg_dump` → restore into a scratch database → `alembic upgrade head` → `alembic check`).
+
 ## Legacy emergency bootstrap
 
 `database.create_tables()` still exists for offline repair. Do **not** call it from the Vercel function lifespan. Prefer Alembic.

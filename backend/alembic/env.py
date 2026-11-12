@@ -7,6 +7,7 @@ from config import settings
 from database import Base
 from models import journal, signal, stock, trade  # noqa: F401
 from models import market_snapshot, prediction_log, premarket_report, strategy_signal  # noqa: F401
+from models import paper_signal, prediction_research_outcome  # noqa: F401
 
 config = context.config
 
