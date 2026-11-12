@@ -17,3 +17,8 @@ backend/.venv/
 # Local DB dumps (do not use a broad *.sql rule — no migration SQL dirs in-repo)
 backend/backups/
 backend/tradingbot_backup.sql
+
+# Python bytecode
+__pycache__/
+*.pyc
+
