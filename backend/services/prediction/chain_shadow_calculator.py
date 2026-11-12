@@ -59,6 +59,15 @@ class ChainShadowCalculator:
 
     @staticmethod
     def _gex(spot: float, calls: List[OptionQuote], puts: List[OptionQuote]) -> Optional[float]:
+        """Net gamma exposure in rupees per 1% spot move. Shadow-only; never scored.
+
+        Units verified 2026-11-12 (17-Nov NIFTY expiry, 25200-25400 CE/PE): Angel FULL-mode
+        opnInterest is in SHARES. Angel OI / NSE option-chain OI was 65.0-68.2 for all ten
+        legs (NIFTY lot size 65; NSE reports contracts). So gamma * OI * S^2 * 1% is rupees,
+        with no lot-size multiplier. If the OI source ever changes to NSE, multiply by lot size.
+        The calls-positive / puts-negative dealer-sign assumption is unverified for Indian
+        options, which is one reason this stays shadow-only.
+        """
         scale = spot * spot * GEX_MOVE_PCT
         call_gex = [q.gamma * q.open_interest * scale for q in calls if q.gamma is not None]
         put_gex = [q.gamma * q.open_interest * scale for q in puts if q.gamma is not None]
