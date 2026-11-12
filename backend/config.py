@@ -75,6 +75,20 @@ class Settings(BaseSettings):
     prediction_adx_range_multiplier: float = 0.70
     prediction_adx_trend_multiplier: float = 1.0
     options_risk_free_rate: float = 0.065
+    # ── Automatic PAPER trading (never sends broker orders) ──────────────────
+    # Places paper entries on the live actionable signal through the normal order service
+    # (every Phase 1 gate applies) and squares off auto positions before the close.
+    auto_paper_enabled: bool = True
+    auto_paper_underlyings: str = "NIFTY"
+    auto_paper_interval_seconds: float = 60.0
+    auto_paper_lots: int = 1
+    auto_paper_entry_start: str = "09:20"      # IST, no auto entries before
+    auto_paper_last_entry: str = "15:00"       # IST, no auto entries at/after
+    auto_paper_square_off: str = "15:15"       # IST, close open auto positions at/after
+    auto_paper_max_entries_per_day: int = 5    # per underlying
+    auto_paper_max_spread_pct: float = 10.0
+    auto_paper_repeat_rejection_minutes: float = 15.0   # don't re-log an identical rejection sooner
+
     # ── Phase 2 shadow scorer v2.0 ────────────────────────────────────────────
     # Logged in prediction_logs.shadow_features.v2 only. Never drives direction, gates,
     # the UI or orders until v2 is approved. Starting values are unvalidated hypotheses;

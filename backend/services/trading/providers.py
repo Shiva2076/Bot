@@ -74,6 +74,13 @@ from services.prediction.technical_factor_analyzer import TechnicalFactorAnalyze
 from services.prediction.time_context_analyzer import TimeContextAnalyzer
 from services.prediction.vix_factor_analyzer import VixFactorAnalyzer
 from services.prediction.v2.factory import build_shadow_scorer_v2
+from repositories.trade_repository import TradeRepository
+from schemas.paper_engine import AutoPaperConfig
+from services.trading.auto_paper_engine import AutoPaperEngine
+from services.trading.auto_paper_unit import sql_unit_factory
+from services.trading.order_service import OrderService
+from services.trading.order_validator import OrderValidator
+from services.trading.paper_fill_model import PaperFillModel
 from repositories.shadow_history_repository import ShadowHistoryRepository
 from schemas.shadow_v2 import ShadowV2Config
 from database import AsyncSessionLocal
@@ -370,4 +377,50 @@ risk_monitor = RiskMonitor(
     mapper=PersonalTradeMapper(PnlCalculator()),
     costs=paper_cost_calculator,
     interval_seconds=settings.risk_monitor_interval_seconds,
+)
+
+
+def build_order_service(session) -> OrderService:
+    """Same construction as the /api/trading order endpoint; every entry gate applies."""
+    return OrderService(
+        repository=TradeRepository(session),
+        resolver=instrument_resolver,
+        market_data=market_data,
+        validator=OrderValidator(),
+        mapper=PersonalTradeMapper(PnlCalculator()),
+        risk_gate=pre_trade_risk_gate,
+        costs=paper_cost_calculator,
+        daily_risk=daily_risk_state,
+        gates=order_entry_gates,
+    )
+
+
+auto_paper_engine = AutoPaperEngine(
+    config=AutoPaperConfig(
+        enabled=settings.auto_paper_enabled,
+        underlyings=[OptionUnderlying(u.strip()) for u in settings.auto_paper_underlyings.split(",") if u.strip()],
+        interval_seconds=settings.auto_paper_interval_seconds,
+        lots=settings.auto_paper_lots,
+        entry_start=settings.auto_paper_entry_start,
+        last_entry=settings.auto_paper_last_entry,
+        square_off=settings.auto_paper_square_off,
+        max_entries_per_day=settings.auto_paper_max_entries_per_day,
+        repeat_rejection_minutes=settings.auto_paper_repeat_rejection_minutes,
+    ),
+    calendar=trading_calendar,
+    predictions=option_prediction_service,
+    expiries=angel_master.expiries,
+    units=sql_unit_factory(
+        AsyncSessionLocal, build_order_service, PersonalTradeMapper(PnlCalculator()), paper_cost_calculator
+    ),
+    fill_model=PaperFillModel(
+        paper_cost_calculator,
+        max_spread_pct=settings.auto_paper_max_spread_pct,
+        max_data_age_seconds=settings.risk_max_data_age_seconds,
+        max_future_skew_seconds=settings.risk_max_future_skew_seconds,
+    ),
+    quotes=market_data.get_ticks,
+    scorer_version=settings.prediction_scorer_version,
+    max_quote_age_seconds=settings.risk_max_data_age_seconds,
+    max_future_skew_seconds=settings.risk_max_future_skew_seconds,
 )

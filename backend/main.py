@@ -14,6 +14,7 @@ from services.market_data import market_data_service
 from services.runtime.background_worker_lifecycle import BackgroundWorkerLifecycle
 from services.trading.providers import (
     angel_master,
+    auto_paper_engine,
     market_snapshot_monitor,
     premarket_scheduler,
     prediction_outcome_monitor,
@@ -30,6 +31,7 @@ background_workers = BackgroundWorkerLifecycle(
     prediction_outcome_monitor=prediction_outcome_monitor,
     market_snapshot_monitor=market_snapshot_monitor,
     premarket_scheduler=premarket_scheduler,
+    auto_paper_engine=auto_paper_engine,
 )
 
 

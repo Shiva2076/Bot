@@ -99,6 +99,45 @@ class PaperSignalView(PaperSignalBase):
     created_at: datetime
 
 
+class AutoPaperConfig(BaseModel):
+    enabled: bool
+    underlyings: List[OptionUnderlying]
+    interval_seconds: float
+    lots: int
+    entry_start: str          # "HH:MM" IST
+    last_entry: str
+    square_off: str
+    max_entries_per_day: int
+    repeat_rejection_minutes: float
+
+
+class AutoPaperSignalSummary(BaseModel):
+    id: int
+    generated_at: datetime
+    underlying: str
+    direction: str
+    contract_symbol: Optional[str] = None
+    entry_premium: Optional[float] = None
+    stop_loss: Optional[float] = None
+    target: Optional[float] = None
+    eligibility_status: str
+    execution_status: str
+    rejection_reasons: List[str] = Field(default_factory=list)
+    trade_id: Optional[int] = None
+
+
+class AutoPaperStatus(BaseModel):
+    mode: str = "PAPER_TRADING_ONLY"
+    enabled: bool
+    config: AutoPaperConfig
+    session_phase: str
+    last_run_at: Optional[datetime] = None
+    last_note: Optional[str] = None
+    open_auto_positions: int = 0
+    entries_today: int = 0
+    signals_today: List[AutoPaperSignalSummary] = Field(default_factory=list)
+
+
 class PaperEngineStatus(BaseModel):
     enabled: bool = False
     mode: str = "PAPER_TRADING_ONLY"

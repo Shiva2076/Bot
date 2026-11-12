@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { AutoPaperStatus } from '../types/autoPaper';
 import type { OptionChain, OptionExpiries, OptionUnderlying } from '../types/options';
 import type { PersonalHistory, PersonalTrade } from '../types/personal';
 import type { PremarketReport } from '../types/premarket';
@@ -81,6 +82,7 @@ export const tradingAPI = {
   getChartStructure: (symbol: string) =>
     api.get<ChartStructureFeatures>('/api/trading/chart-structure', { params: { symbol } }),
   getPositions: () => api.get<OpenPositionsResponse>('/api/trading/positions'),
+  getAutoPaper: () => api.get<AutoPaperStatus>('/api/trading/auto-paper'),
   placeOrder: (order: MarketOrderRequest) => api.post<PersonalTrade>('/api/trading/orders', order),
   exitPosition: (tradeId: number) => api.post<PersonalTrade>(`/api/trading/orders/${tradeId}/exit`),
   getDecision: (underlying: OptionUnderlying, expiry: string, force = false) =>

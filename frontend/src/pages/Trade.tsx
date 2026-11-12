@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { tradingAPI } from '../api/client';
+import AutoPaperPanel from '../components/AutoPaperPanel';
 import ChartStructurePanel from '../components/ChartStructurePanel';
 import LiveChart from '../components/LiveChart';
 import OptionChainTable from '../components/OptionChainTable';
@@ -357,6 +358,7 @@ export default function Trade() {
       {error && <div className="card" style={{ marginBottom: 16, color: 'var(--sell)' }}>{error}</div>}
 
       <PremarketPanel compact />
+      <AutoPaperPanel />
 
       <IndexSignalBar onSelectIndex={setTab} onPlaced={fetchPositions} />
 

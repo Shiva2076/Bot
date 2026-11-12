@@ -1,12 +1,16 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import List
+
+import pytz
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from repositories.paper_signal_repository import PaperSignalRepository
 from repositories.trade_repository import TradeRepository
 from schemas.options import OptionUnderlying
+from schemas.paper_engine import AutoPaperSignalSummary, AutoPaperStatus
 from schemas.order_entry import EntryOrigin
 from schemas.personal_trade import PersonalTradeView
 from schemas.prediction import ChartStructureFeatures
@@ -20,6 +24,8 @@ from services.trading.errors import MarketDataUnavailableError, UnknownInstrumen
 from services.trading.order_service import OrderService
 from services.trading.order_validator import OrderValidator
 from services.trading.providers import (
+    auto_paper_engine,
+    trading_calendar,
     chart_structure_query_service,
     daily_risk_state,
     instrument_catalog,
@@ -32,6 +38,7 @@ from services.trading.providers import (
 )
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
+IST = pytz.timezone("Asia/Kolkata")
 
 
 def get_order_service(session: AsyncSession = Depends(get_db)) -> OrderService:
@@ -125,6 +132,34 @@ async def place_order(request: MarketOrderRequest, service: OrderService = Depen
         raise HTTPException(status_code=400, detail=str(e))
     except MarketDataUnavailableError as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+@router.get("/auto-paper", response_model=AutoPaperStatus)
+async def get_auto_paper_status(session: AsyncSession = Depends(get_db)):
+    """Automatic paper-trading engine state and today's recorded auto signals (read-only)."""
+    now = datetime.now(timezone.utc)
+    today = now.astimezone(IST).date()
+    signals = await PaperSignalRepository(session).list_for_session(session_date=today, limit=200)
+    auto = [s for s in signals if s.strategy == "AUTO_OPTION_PREDICTION"]
+    open_trades = [t for t in await TradeRepository(session).list_open() if t.paper_signal_id is not None]
+    return AutoPaperStatus(
+        enabled=auto_paper_engine.config.enabled,
+        config=auto_paper_engine.config,
+        session_phase=trading_calendar.session_phase(now),
+        last_run_at=auto_paper_engine.last_run_at,
+        last_note=auto_paper_engine.last_note,
+        open_auto_positions=len(open_trades),
+        entries_today=sum(1 for s in auto if s.execution_status == "EXECUTED"),
+        signals_today=[
+            AutoPaperSignalSummary(
+                id=s.id, generated_at=s.generated_at, underlying=s.underlying, direction=s.direction,
+                contract_symbol=s.contract_symbol, entry_premium=s.entry_premium, stop_loss=s.stop_loss,
+                target=s.target, eligibility_status=s.eligibility_status, execution_status=s.execution_status,
+                rejection_reasons=list(s.rejection_reasons or []), trade_id=s.trade_id,
+            )
+            for s in auto
+        ],
+    )
 
 
 @router.post("/orders/{trade_id}/exit", response_model=PersonalTradeView)

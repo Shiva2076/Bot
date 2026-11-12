@@ -1,11 +1,14 @@
 import asyncio
-from typing import List
+from typing import TYPE_CHECKING, List, Optional
 
 from services.brokers.angel.instrument_master import AngelInstrumentMaster
 from services.premarket.scheduler import PremarketScheduler
 from services.prediction.prediction_outcome_monitor import PredictionOutcomeMonitor
 from services.snapshots.market_snapshot_monitor import MarketSnapshotMonitor
 from services.trading.risk_monitor import RiskMonitor
+
+if TYPE_CHECKING:
+    from services.trading.auto_paper_engine import AutoPaperEngine
 
 
 class BackgroundWorkerLifecycle:
@@ -18,12 +21,14 @@ class BackgroundWorkerLifecycle:
         prediction_outcome_monitor: PredictionOutcomeMonitor,
         market_snapshot_monitor: MarketSnapshotMonitor,
         premarket_scheduler: PremarketScheduler,
+        auto_paper_engine: Optional["AutoPaperEngine"] = None,
     ):
         self._angel_master = angel_master
         self._risk_monitor = risk_monitor
         self._prediction_outcome_monitor = prediction_outcome_monitor
         self._market_snapshot_monitor = market_snapshot_monitor
         self._premarket_scheduler = premarket_scheduler
+        self._auto_paper_engine = auto_paper_engine
         self._tasks: List[asyncio.Task] = []
 
     async def start(self) -> None:
@@ -34,6 +39,8 @@ class BackgroundWorkerLifecycle:
                 asyncio.create_task(self._prediction_outcome_monitor.run()),
                 asyncio.create_task(self._market_snapshot_monitor.run()),
             ]
+            if self._auto_paper_engine is not None:
+                self._tasks.append(asyncio.create_task(self._auto_paper_engine.run()))
             self._premarket_scheduler.start()
             await self._premarket_scheduler.catch_up_if_needed()
         except Exception:

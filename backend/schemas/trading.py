@@ -27,6 +27,7 @@ class ExitReason(str, Enum):
     SL_HIT = "SL_HIT"
     TARGET_HIT = "TARGET_HIT"
     EXPIRED = "EXPIRED"
+    SQUARE_OFF = "SQUARE_OFF"
 
 
 class Instrument(BaseModel):
