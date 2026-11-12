@@ -14,6 +14,7 @@ import Backtest from './pages/Backtest';
 import Personal from './pages/Personal';
 import Trade from './pages/Trade';
 import { isMarketOpen } from './utils/market-hours';
+import ErrorBoundary from './components/ErrorBoundary';
 import './index.css';
 
 const navItems = [
@@ -62,6 +63,8 @@ function Sidebar() {
   );
 }
 
+// Each page area gets its own boundary so one crashing page (e.g. on a malformed API
+// response) shows an error card instead of blanking the whole app or another page.
 function MainContent() {
   const { pathname } = useLocation();
   const tradeActive = pathname === '/trade';
@@ -71,21 +74,27 @@ function MainContent() {
   return (
     <main className="main-content">
       <PersistentRoute active={tradeActive}>
-        <Trade />
+        <ErrorBoundary>
+          <Trade />
+        </ErrorBoundary>
       </PersistentRoute>
       <PersistentRoute active={personalActive}>
-        <Personal />
+        <ErrorBoundary>
+          <Personal />
+        </ErrorBoundary>
       </PersistentRoute>
       {showEphemeral && (
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/watchlist" element={<Watchlist />} />
-          <Route path="/portfolio" element={<Portfolio />} />
-          <Route path="/news" element={<News />} />
-          <Route path="/history" element={<TradeHistory />} />
-          <Route path="/journal" element={<Journal />} />
-          <Route path="/backtest" element={<Backtest />} />
-        </Routes>
+        <ErrorBoundary resetKey={pathname}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/watchlist" element={<Watchlist />} />
+            <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/news" element={<News />} />
+            <Route path="/history" element={<TradeHistory />} />
+            <Route path="/journal" element={<Journal />} />
+            <Route path="/backtest" element={<Backtest />} />
+          </Routes>
+        </ErrorBoundary>
       )}
     </main>
   );

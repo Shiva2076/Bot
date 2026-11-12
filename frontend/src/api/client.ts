@@ -24,6 +24,18 @@ if (apiKey) {
   api.defaults.headers.common['X-API-Key'] = apiKey;
 }
 
+// An HTML page means the request never reached the backend (e.g. VITE_API_BASE_URL is unset and
+// the dev server or SPA rewrite answered with index.html). Treat it as an error, not as data.
+api.interceptors.response.use((response) => {
+  const contentType = String(response.headers['content-type'] ?? '');
+  if (contentType.includes('text/html')) {
+    return Promise.reject(new Error(
+      'Backend not reachable: received an HTML page instead of API data. Check VITE_API_BASE_URL.',
+    ));
+  }
+  return response;
+});
+
 export const marketAPI = {
   getWatchlist: () => api.get('/api/market/watchlist'),
   getQuotes: () => api.get('/api/market/quotes'),

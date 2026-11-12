@@ -110,7 +110,10 @@ class MarketDataService:
         market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
         return market_open <= now <= market_close
 
-    _semaphore = asyncio.Semaphore(5)
+    # Shared by every Yahoo quote fetch (breadth alone needs ~50). Kept moderate to avoid Yahoo rate limits.
+    _semaphore = asyncio.Semaphore(10)
+    # Concurrent requests for the same symbol share one in-flight fetch instead of queueing duplicates.
+    _inflight: Dict[str, "asyncio.Task[Optional[Dict]]"] = {}
 
     async def fetch_live_quote(self, symbol: str) -> Optional[Dict]:
         """Fetch latest price for a symbol."""
@@ -119,9 +122,17 @@ class MarketDataService:
         if cached:
             return cached
 
+        task = self._inflight.get(symbol)
+        if task is None:
+            task = asyncio.ensure_future(self._fetch_and_cache_quote(symbol, cache_key))
+            self._inflight[symbol] = task
+            task.add_done_callback(lambda _t, s=symbol: self._inflight.pop(s, None))
+        return await asyncio.shield(task)
+
+    async def _fetch_and_cache_quote(self, symbol: str, cache_key: str) -> Optional[Dict]:
         async with self._semaphore:
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 data = await loop.run_in_executor(None, self._fetch_quote_sync, symbol)
                 if data:
                     await self.cache_set(cache_key, data, ttl=60)

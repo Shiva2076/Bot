@@ -92,24 +92,19 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
+  // Each section renders as soon as its own request returns; a slow one (breadth fetches ~50
+  // quotes) no longer holds back the whole page.
   const fetchData = async () => {
-    try {
-      const [indRes, secRes, breadthRes, newsRes] = await Promise.allSettled([
-        marketAPI.getIndices(),
-        sectorsAPI.getSectors(),
-        marketAPI.getBreadth(),
-        newsAPI.getNews(),
-      ]);
-      if (indRes.status === 'fulfilled') setIndices(indRes.value.data.indices || []);
-      if (secRes.status === 'fulfilled') setSectors(secRes.value.data.sectors || []);
-      if (breadthRes.status === 'fulfilled') setBreadth(breadthRes.value.data);
-      if (newsRes.status === 'fulfilled') setNews(newsRes.value.data.news?.slice(0, 6) || []);
-      setLastUpdated(new Date());
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    const shown = () => setLoading(false);
+    const sections = [
+      marketAPI.getIndices().then(res => setIndices(res.data.indices || [])),
+      sectorsAPI.getSectors().then(res => setSectors(res.data.sectors || [])),
+      marketAPI.getBreadth().then(res => setBreadth(res.data)),
+      newsAPI.getNews().then(res => setNews(res.data.news?.slice(0, 6) || [])),
+    ].map(p => p.then(shown, (e) => console.error(e)));
+    await Promise.allSettled(sections);
+    setLoading(false);
+    setLastUpdated(new Date());
   };
 
   useEffect(() => {
