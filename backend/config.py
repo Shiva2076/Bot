@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     # Risk gate (paper)
     risk_max_data_age_seconds: float = 30.0
+    # Exchange timestamps further ahead of our clock than this are rejected (clock/parse fault).
+    risk_max_future_skew_seconds: float = 5.0
     risk_per_trade_pct: float = 1.0
     risk_daily_loss_limit_pct: float = 3.0
     risk_max_open_positions: int = 5

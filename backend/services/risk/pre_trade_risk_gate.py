@@ -17,6 +17,8 @@ class PreTradeRiskGate:
         max_open_positions: int,
         cost_calculator: PaperCostCalculator,
         max_data_age_setting_name: str = "risk_max_data_age_seconds",
+        max_future_skew_seconds: float = 5.0,
+        max_future_skew_setting_name: str = "risk_max_future_skew_seconds",
     ):
         self._max_data_age_seconds = max_data_age_seconds
         self._max_risk_per_trade_pct = max_risk_per_trade_pct
@@ -24,6 +26,8 @@ class PreTradeRiskGate:
         self._max_open_positions = max_open_positions
         self._costs = cost_calculator
         self._max_data_age_setting_name = max_data_age_setting_name
+        self._max_future_skew_seconds = max_future_skew_seconds
+        self._max_future_skew_setting_name = max_future_skew_setting_name
 
     def evaluate(self, context: PreTradeOrderContext) -> RiskGateDecision:
         reasons = []
@@ -47,9 +51,14 @@ class PreTradeRiskGate:
                 exchange_ts = exchange_ts.replace(tzinfo=timezone.utc)
             now = datetime.now(timezone.utc)
             age = (now - exchange_ts.astimezone(timezone.utc)).total_seconds()
-            if age < 0:
-                age = 0.0
-            if age > self._max_data_age_seconds:
+            if age < -self._max_future_skew_seconds:
+                # A timestamp well ahead of our clock is a parsing/timezone fault, never "fresh".
+                reasons.append(
+                    f"Exchange timestamp {-age:.0f}s in the future "
+                    f"(> {self._max_future_skew_setting_name}={self._max_future_skew_seconds:.0f}s); "
+                    "cannot verify freshness"
+                )
+            elif age > self._max_data_age_seconds:
                 reasons.append(
                     f"Exchange data stale ({age:.0f}s > {self._max_data_age_setting_name}={self._max_data_age_seconds:.0f}s)"
                 )

@@ -76,6 +76,18 @@ def test_rejects_stale_exchange_data():
     assert any("risk_max_data_age_seconds=30s" in r for r in decision.reasons)
 
 
+def test_rejects_exchange_timestamp_far_in_future():
+    # e.g. an IST wall-clock time mis-parsed as UTC lands 5.5h ahead; it must never count as fresh.
+    decision = _gate().evaluate(_ctx(exchange_timestamp=datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)))
+    assert decision.allowed is False
+    assert any("in the future" in r and "risk_max_future_skew_seconds=5s" in r for r in decision.reasons)
+
+
+def test_allows_small_clock_skew_into_future():
+    decision = _gate().evaluate(_ctx(exchange_timestamp=datetime.now(timezone.utc) + timedelta(seconds=2)))
+    assert decision.allowed is True
+
+
 def test_rejects_premarket_no_trade():
     decision = _gate().evaluate(_ctx(premarket_action=RecommendedAction.NO_TRADE))
     assert decision.allowed is False

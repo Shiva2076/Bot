@@ -297,6 +297,7 @@ pre_trade_risk_gate = PreTradeRiskGate(
     daily_loss_limit_pct=settings.risk_daily_loss_limit_pct,
     max_open_positions=settings.risk_max_open_positions,
     cost_calculator=paper_cost_calculator,
+    max_future_skew_seconds=settings.risk_max_future_skew_seconds,
 )
 daily_risk_state = DailyRiskState()
 position_sizer = PositionSizer(settings.risk_per_trade_pct)

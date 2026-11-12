@@ -63,7 +63,13 @@ class AngelQuoteMapper:
 
     @staticmethod
     def parse_exchange_timestamp(quote: AngelQuote) -> Optional[datetime]:
-        """Parse Angel FULL-mode exchange times. Never invent a timestamp from fetch time."""
+        """Parse Angel FULL-mode exchange times. Never invent a timestamp from fetch time.
+
+        exchTradeTime is preferred over exchFeedTime on purpose: entries are priced at LTP,
+        and the last-trade time is what dates that price. Judging on feed time alone would
+        accept an LTP that has not traded for minutes (a looser gate). Feed time is used
+        only when no usable trade time exists.
+        """
         for raw in (quote.exch_trade_time, quote.exch_feed_time):
             parsed = AngelQuoteMapper.parse_angel_time(raw)
             if parsed is not None:
