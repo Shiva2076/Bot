@@ -73,6 +73,10 @@ from services.prediction.strike_window_policy import StrikeWindowPolicy
 from services.prediction.technical_factor_analyzer import TechnicalFactorAnalyzer
 from services.prediction.time_context_analyzer import TimeContextAnalyzer
 from services.prediction.vix_factor_analyzer import VixFactorAnalyzer
+from services.prediction.v2.factory import build_shadow_scorer_v2
+from repositories.shadow_history_repository import ShadowHistoryRepository
+from schemas.shadow_v2 import ShadowV2Config
+from database import AsyncSessionLocal
 from services.snapshots.market_snapshot_mapper import MarketSnapshotMapper
 from services.snapshots.market_snapshot_monitor import MarketSnapshotMonitor
 from services.snapshots.market_snapshot_recorder import MarketSnapshotDependencies, MarketSnapshotRecorder
@@ -205,6 +209,42 @@ vix_provider_for_prediction = IndiaVixProvider(
 prediction_log_mapper = PredictionLogMapper(settings.prediction_scorer_version, settings.prediction_data_version)
 prediction_log_recorder = PredictionLogRecorder(prediction_log_mapper)
 prediction_log_query_service = PredictionLogQueryService(prediction_log_mapper)
+
+
+async def _near_future_candles(underlying: OptionUnderlying):
+    contract = await angel_master.near_future(underlying)
+    if contract is None:
+        return None
+    return contract.symbol, await angel_provider.get_candles(contract.symbol, CandleInterval.FIVE_MINUTES)
+
+
+shadow_v2_config = ShadowV2Config(
+    version=settings.shadow_scorer_version,
+    pcr_change_window_minutes=settings.shadow_pcr_change_window_minutes,
+    pcr_change_tolerance_minutes=settings.shadow_pcr_change_tolerance_minutes,
+    pcr_change_full_scale=settings.shadow_pcr_change_full_scale,
+    premarket_half_life_minutes=settings.shadow_premarket_half_life_minutes,
+    oi_buildup_weight=settings.shadow_oi_buildup_weight,
+    oi_buildup_window_minutes=settings.shadow_oi_buildup_window_minutes,
+    oi_buildup_tolerance_minutes=settings.shadow_oi_buildup_tolerance_minutes,
+    oi_buildup_min_oi_change_pct=settings.shadow_oi_buildup_min_oi_change_pct,
+    oi_buildup_min_price_change_pct=settings.shadow_oi_buildup_min_price_change_pct,
+    oi_buildup_full_scale_pct=settings.shadow_oi_buildup_full_scale_pct,
+    futures_min_session_bars=settings.shadow_futures_min_session_bars,
+    futures_atr_period=settings.shadow_futures_atr_period,
+    futures_rvol_lookback_sessions=settings.shadow_futures_rvol_lookback_sessions,
+    futures_rvol_min_prior_sessions=settings.shadow_futures_rvol_min_prior_sessions,
+    iv_rank_lookback_sessions=settings.shadow_iv_rank_lookback_sessions,
+    iv_rank_min_sessions=settings.shadow_iv_rank_min_sessions,
+    iv_rank_block_buying_at=settings.shadow_iv_rank_block_buying_at,
+)
+shadow_scorer_v2 = build_shadow_scorer_v2(
+    shadow_v2_config,
+    builder=prediction_factor_builder,
+    live_weight_budget=PredictionWeightBudget(settings.prediction_agent_weight).intended_total,
+    history=ShadowHistoryRepository(AsyncSessionLocal),
+    futures_candles=_near_future_candles,
+)
 option_prediction_service = OptionPredictionService(
     chain_service=option_chain_service,
     market_data=market_data,
@@ -259,6 +299,7 @@ option_prediction_service = OptionPredictionService(
     ),
     cache_seconds=settings.prediction_cache_seconds,
     log_recorder=prediction_log_recorder,
+    shadow_v2=shadow_scorer_v2,
 )
 market_snapshot_monitor = MarketSnapshotMonitor(
     recorder=MarketSnapshotRecorder(MarketSnapshotDependencies(

@@ -31,6 +31,18 @@ class PredictionFactorBuilder:
             status=FactorStatus.DISABLED,
         )
 
+    def neutral(self, name: str, detail: str, cluster: FactorCluster) -> PredictionFactor:
+        """A working factor with no vote right now (e.g. no buildup signal); weight 0, no direction."""
+        return PredictionFactor(
+            name=name,
+            bias=FactorBias.NEUTRAL,
+            score=0.0,
+            weight=0.0,
+            detail=f"{detail} [neutral: weight 0]",
+            cluster=cluster,
+            status=FactorStatus.DISABLED,
+        )
+
     def unavailable(self, name: str, detail: str, cluster: FactorCluster) -> PredictionFactor:
         return PredictionFactor(
             name=name,

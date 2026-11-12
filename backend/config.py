@@ -75,6 +75,34 @@ class Settings(BaseSettings):
     prediction_adx_range_multiplier: float = 0.70
     prediction_adx_trend_multiplier: float = 1.0
     options_risk_free_rate: float = 0.065
+    # ── Phase 2 shadow scorer v2.0 ────────────────────────────────────────────
+    # Logged in prediction_logs.shadow_features.v2 only. Never drives direction, gates,
+    # the UI or orders until v2 is approved. Starting values are unvalidated hypotheses;
+    # do not tune them from a handful of sessions.
+    shadow_scorer_version: str = "v2.0"
+    shadow_pcr_change_window_minutes: float = 15.0
+    shadow_pcr_change_tolerance_minutes: float = 4.0
+    shadow_pcr_change_full_scale: float = 0.10       # near-spot PCR change that maps to score ±1
+    shadow_premarket_half_life_minutes: float = 90.0
+    shadow_oi_buildup_weight: float = 0.07
+    shadow_oi_buildup_window_minutes: float = 15.0
+    shadow_oi_buildup_tolerance_minutes: float = 4.0
+    shadow_oi_buildup_min_oi_change_pct: float = 1.0     # % of near-spot OI before a mode counts
+    shadow_oi_buildup_min_price_change_pct: float = 0.05
+    shadow_oi_buildup_full_scale_pct: float = 5.0        # net writer flow (% of near OI) for score ±1
+    shadow_futures_min_session_bars: int = 3
+    shadow_futures_atr_period: int = 14
+    shadow_futures_rvol_lookback_sessions: int = 5
+    shadow_futures_rvol_min_prior_sessions: int = 3
+    shadow_iv_rank_lookback_sessions: int = 60
+    shadow_iv_rank_min_sessions: int = 20
+    shadow_iv_rank_block_buying_at: float = 80.0         # rank >= this blocks option buying (gate, not a vote)
+
+    # ── Offline evaluation (scripts/evaluate_predictions.py) ─────────────────
+    evaluation_min_samples: int = 200     # directional rows per horizon before any conclusion
+    evaluation_min_sessions: int = 20
+    evaluation_holdout_fraction: float = 0.3   # latest share of sessions kept out of sample
+
     snapshot_interval_seconds: float = 180.0
     snapshot_underlyings: str = "NIFTY"
     agent_consensus_cache_seconds: float = 300.0

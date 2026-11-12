@@ -384,10 +384,42 @@ class ChartStructureFeatures(BaseModel):
         )
 
 
+class IvRankGateStatus(str, Enum):
+    OFF = "OFF"                    # not enough stored sessions yet, or IV unavailable
+    PASS = "PASS"
+    BLOCK_BUYING = "BLOCK_BUYING"
+
+
+class IvRankGate(BaseModel):
+    status: IvRankGateStatus
+    iv_rank: Optional[float] = None
+    atm_iv: Optional[float] = None
+    sessions: int = 0
+    min_sessions: int
+    block_at: float
+    detail: str
+
+
+class ShadowScoreV2(BaseModel):
+    """Phase 2 shadow scorer output. Logged for evaluation only; never shown or traded on."""
+
+    version: str
+    raw_score: float = 0.0
+    adjusted_score: float = 0.0
+    direction: PredictionDirection = PredictionDirection.NO_TRADE
+    gate: Optional[str] = None
+    coverage: float = 0.0
+    iv_rank_gate: Optional[IvRankGate] = None
+    factors: List[PredictionFactor] = Field(default_factory=list)
+    notes: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
 class ShadowFeatures(BaseModel):
     chain: ChainShadowFeatures
     futures: Optional[FuturesFlowState]
     chart: Optional[ChartStructureFeatures] = None
+    v2: Optional[ShadowScoreV2] = None
 
 
 class FreshnessRejectReason(str, Enum):

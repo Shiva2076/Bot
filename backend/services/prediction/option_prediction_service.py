@@ -1,7 +1,7 @@
 import asyncio
 import time
 from datetime import date, datetime, timezone
-from typing import Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 import pytz
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,9 @@ from services.options.option_chain_service import UNDERLYING_SPOT_SYMBOLS, Optio
 from services.prediction.prediction_dependencies import PredictionAnalyzers, PredictionSources
 from services.prediction.prediction_log_recorder import PredictionLogRecorder
 from services.trading.failover_market_data import FailoverMarketData
+
+if TYPE_CHECKING:
+    from services.prediction.v2.shadow_scorer_v2 import ShadowScorerV2
 
 IST = pytz.timezone("Asia/Kolkata")
 OPTION_TYPE_BY_DIRECTION: Dict[PredictionDirection, OptionType] = {
@@ -52,6 +55,7 @@ class OptionPredictionService:
         analyzers: PredictionAnalyzers,
         cache_seconds: float,
         log_recorder: PredictionLogRecorder,
+        shadow_v2: Optional["ShadowScorerV2"] = None,
     ):
         self._chain_service = chain_service
         self._market_data = market_data
@@ -59,6 +63,7 @@ class OptionPredictionService:
         self._analyzers = analyzers
         self._cache_seconds = cache_seconds
         self._log_recorder = log_recorder
+        self._shadow_v2 = shadow_v2
         self._cache: Dict[Tuple[OptionUnderlying, date], Tuple[float, OptionPrediction]] = {}
 
     async def predict(
@@ -74,6 +79,12 @@ class OptionPredictionService:
             if cached and time.time() - cached[0] < self._cache_seconds:
                 return cached[1]
         prediction = await self._build(underlying, expiry)
+        if self._shadow_v2 is not None:
+            # Shadow only: attached for logging/evaluation; live direction, gates and contract untouched.
+            v2 = await self._shadow_v2.evaluate(prediction)
+            prediction = prediction.model_copy(
+                update={"shadow": prediction.shadow.model_copy(update={"v2": v2})}
+            )
         if session is not None:
             try:
                 log_id = await self._log_recorder.record(session, prediction)
